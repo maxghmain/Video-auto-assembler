@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Video Auto-Assembler - Interactive Overview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Chosen Palette: Warm Neutrals & Professional Harmony */
+        /* Background: Stone 50 (#fafaf9) */
+        /* Card/Surface: White (#ffffff) */
+        /* Primary Text: Stone 800 (#292524) */
+        /* Secondary Text: Stone 500 (#78716c) */
+        /* Accent: Indigo 600 (#4f46e5) - Professional/Tech */
+        /* Highlight: Amber 500 (#f59e0b) - Creativity/Warmth */
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #fafaf9;
+            color: #292524;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 300px;
+            max-height: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Custom Scrollbar for clean look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d6d3d1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a29e;
+        }
+
+        .step-active {
+            border-left: 4px solid #4f46e5;
+            background-color: #eef2ff;
+        }
+        
+        .step-inactive {
+            border-left: 4px solid transparent;
+        }
+
+        .btn-primary {
+            background-color: #4f46e5;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+        }
+    </style>
+    <!-- Chosen Palette: Warm Neutral (Stone) with Indigo Accent -->
+    <!-- Application Structure Plan: 
+         1. Hero Section: Core Value Proposition.
+         2. Interactive Matrix Simulator: To immediately demonstrate the "Matrix Calculation" power (key differentiator).
+         3. Workflow Walkthrough: A 5-step interactive guide where users click through the process (Upload -> Settings -> Effects -> Calc -> Export). This replaces a long scroll with an engaged learning process.
+         4. Efficiency Analysis: Comparative charts showing AI vs Manual capability.
+         5. Feature Highlights: Grid layout for key benefits.
+         Rationale: The structure prioritizes understanding the "Matrix" concept first, as that is the engine of value, followed by the "How-to" flow to demonstrate ease of use.
+    -->
+    <!-- Visualization & Content Choices:
+         1. Matrix Simulator (JS Counter): Goal: Inform/Change. Shows exponential growth of possibilities.
+         2. Workflow Steps (Interactive Tabs): Goal: Organize. Breaks down the 5 steps into digestible chunks.
+         3. Randomization Demo (JS DOM Manipulation): Goal: Inform. Shows visually what "Random Color/Font" means in Step 2.
+         4. Efficiency Chart (Chart.js Line): Goal: Compare. Visualizes Manual (Linear) vs AI (Exponential) output over time.
+         5. Composition Chart (Chart.js Doughnut): Goal: Inform. Shows the structure of a single video unit (Scene A + Scene B + Scene C).
+         CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="antialiased">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center">
+                    <span class="text-2xl font-bold text-indigo-600">AI Assembler</span>
+                </div>
+                <div class="hidden md:flex space-x-8">
+                    <a href="#simulator" class="text-stone-500 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Simulation</a>
+                    <a href="#workflow" class="text-stone-500 hover:text-indigo-600 px-3 py-2 text-sm font-medium">How it Works</a>
+                    <a href="#analysis" class="text-stone-500 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Efficiency</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <div class="bg-stone-50 py-16 sm:py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 class="text-4xl font-extrabold text-stone-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
+                โปรแกรมตัดต่อวีดีโออัตโนมัติ
+                <span class="block text-indigo-600">AI Video Auto-Assembler</span>
+            </h1>
+            <p class="mt-4 max-w-2xl mx-auto text-xl text-stone-500">
+                เปลี่ยนคลิปต้นฉบับเพียงไม่กี่ไฟล์ ให้กลายเป็นวีดีโอใหม่นับร้อยนับพัน ด้วยพลังการจับคู่แบบ Matrix Combination และระบบสุ่มอัจฉริยะ
+            </p>
+            <div class="mt-8 flex justify-center gap-4">
+                <a href="#simulator" class="btn-primary px-8 py-3 rounded-lg text-lg font-medium shadow-md">
+                    ลองคำนวณจำนวนวีดีโอ
+                </a>
+                <a href="#workflow" class="bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 px-8 py-3 rounded-lg text-lg font-medium transition shadow-sm">
+                    ดูขั้นตอนการทำงาน
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Matrix Simulator -->
+    <div id="simulator" class="bg-white py-16 border-t border-stone-200">
+        <div class="max-w-5xl mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-base text-indigo-600 font-semibold tracking-wide uppercase">Core Technology</h2>
+                <p class="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-stone-900 sm:text-4xl">
+                    จำลองพลังการคำนวณแบบ Matrix
+                </p>
+                <p class="mt-4 max-w-2xl text-xl text-stone-500 mx-auto">
+                    ลองกำหนดจำนวน "ซีน" และ "คลิปย่อย" เพื่อดูว่า AI สามารถสร้างวีดีโอที่ไม่ซ้ำกันได้ทั้งหมดกี่รูปแบบ
+                </p>
+            </div>
+
+            <div class="bg-stone-50 rounded-2xl shadow-lg border border-stone-200 overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2">
+                    <div class="p-8">
+                        <h3 class="text-lg font-medium text-stone-900 mb-6">ตั้งค่าตัวแปร (Input)</h3>
+                        
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-stone-700 mb-2">จำนวนซีน (Folders)</label>
+                            <input type="range" id="sceneInput" min="2" max="5" value="3" class="w-full h-2 bg-stone-300 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                            <div class="flex justify-between text-xs text-stone-500 mt-2">
+                                <span>2 Scenes</span>
+                                <span id="sceneValue" class="text-indigo-600 font-bold text-lg">3</span>
+                                <span>5 Scenes</span>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-stone-700 mb-2">จำนวนคลิปย่อยต่อซีน</label>
+                            <input type="range" id="clipInput" min="2" max="20" value="10" class="w-full h-2 bg-stone-300 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+                            <div class="flex justify-between text-xs text-stone-500 mt-2">
+                                <span>2 Clips</span>
+                                <span id="clipValue" class="text-indigo-600 font-bold text-lg">10</span>
+                                <span>20 Clips</span>
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                            <p class="text-sm text-indigo-800">
+                                <strong>หลักการคำนวณ:</strong> จำนวนคลิปใน Scene 1 × Scene 2 × ... × Scene N
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="bg-indigo-600 p-8 flex flex-col justify-center items-center text-center text-white relative overflow-hidden">
+                        <!-- Abstract Background Decoration -->
+                        <div class="absolute top-0 left-0 w-full h-full opacity-10">
+                            <div style="font-size: 100px; line-height: 1; position: absolute; top: -20px; left: -20px;">×</div>
+                            <div style="font-size: 150px; line-height: 1; position: absolute; bottom: -40px; right: -40px;">+</div>
+                        </div>
+
+                        <h3 class="text-indigo-200 text-sm uppercase tracking-wider font-semibold mb-2 relative z-10">Total Unique Videos</h3>
+                        <div id="totalOutput" class="text-6xl font-extrabold mb-2 relative z-10">1,000</div>
+                        <p class="text-indigo-200 text-sm relative z-10">วีดีโอที่ไม่ซ้ำกันเลย</p>
+
+                        <div class="mt-8 w-full bg-white/10 rounded-lg p-4 backdrop-blur-sm relative z-10">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>Manual Production Capacity</span>
+                                <span>~5 / Day</span>
+                            </div>
+                            <div class="w-full bg-indigo-900/50 rounded-full h-2 mb-4">
+                                <div class="bg-white rounded-full h-2" style="width: 1%"></div>
+                            </div>
+                            
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="font-bold text-white">AI Capacity</span>
+                                <span>High Volume</span>
+                            </div>
+                            <div class="w-full bg-indigo-900/50 rounded-full h-2">
+                                <div class="bg-green-400 rounded-full h-2" style="width: 100%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Workflow Section -->
+    <div id="workflow" class="py-16 bg-stone-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-stone-900">5 ขั้นตอนการทำงาน</h2>
+                <p class="mt-4 text-lg text-stone-500">จากโฟลเดอร์เปล่า สู่ไฟล์วีดีโอพร้อมใช้งาน</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Step Navigation -->
+                <div class="lg:col-span-1 space-y-2">
+                    <button onclick="setStep(1)" id="btn-step-1" class="w-full text-left px-6 py-4 rounded-lg bg-white shadow-sm hover:bg-stone-50 transition step-active focus:outline-none">
+                        <span class="text-xs font-bold text-stone-400 uppercase">Step 1</span>
+                        <h3 class="text-lg font-bold text-stone-900">Upload & Prepare</h3>
+                        <p class="text-sm text-stone-500 mt-1">จัดเตรียมโฟลเดอร์ซีน</p>
+                    </button>
+                    <button onclick="setStep(2)" id="btn-step-2" class="w-full text-left px-6 py-4 rounded-lg bg-white shadow-sm hover:bg-stone-50 transition step-inactive focus:outline-none">
+                        <span class="text-xs font-bold text-stone-400 uppercase">Step 2</span>
+                        <h3 class="text-lg font-bold text-stone-900">Basic Settings</h3>
+                        <p class="text-sm text-stone-500 mt-1">ตัดต่อและตั้งค่าข้อความ</p>
+                    </button>
+                    <button onclick="setStep(3)" id="btn-step-3" class="w-full text-left px-6 py-4 rounded-lg bg-white shadow-sm hover:bg-stone-50 transition step-inactive focus:outline-none">
+                        <span class="text-xs font-bold text-stone-400 uppercase">Step 3</span>
+                        <h3 class="text-lg font-bold text-stone-900">Effects & Position</h3>
+                        <p class="text-sm text-stone-500 mt-1">จัดวางตำแหน่งและเอฟเฟค</p>
+                    </button>
+                    <button onclick="setStep(4)" id="btn-step-4" class="w-full text-left px-6 py-4 rounded-lg bg-white shadow-sm hover:bg-stone-50 transition step-inactive focus:outline-none">
+                        <span class="text-xs font-bold text-stone-400 uppercase">Step 4</span>
+                        <h3 class="text-lg font-bold text-stone-900">Calculation</h3>
+                        <p class="text-sm text-stone-500 mt-1">คำนวณและสุ่มเลือก</p>
+                    </button>
+                    <button onclick="setStep(5)" id="btn-step-5" class="w-full text-left px-6 py-4 rounded-lg bg-white shadow-sm hover:bg-stone-50 transition step-inactive focus:outline-none">
+                        <span class="text-xs font-bold text-stone-400 uppercase">Step 5</span>
+                        <h3 class="text-lg font-bold text-stone-900">Export</h3>
+                        <p class="text-sm text-stone-500 mt-1">บันทึกและส่งออก</p>
+                    </button>
+                </div>
+
+                <!-- Step Content Display -->
+                <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-stone-200 p-8 min-h-[500px] flex flex-col justify-center">
+                    
+                    <!-- Step 1 Content -->
+                    <div id="content-step-1" class="step-content">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-indigo-100 rounded-full text-indigo-600 mb-4 text-2xl">📂</div>
+                            <h3 class="text-2xl font-bold text-stone-900">การจัดเตรียมไฟล์ (Upload)</h3>
+                            <p class="text-stone-500">โครงสร้างโฟลเดอร์คือกุญแจสำคัญ</p>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 mb-6 text-center">
+                            <div class="p-4 bg-stone-50 rounded-lg border border-dashed border-stone-300">
+                                <div class="text-lg font-bold text-stone-700">Folder A</div>
+                                <div class="text-xs text-stone-500">Scene 1 (Intro)</div>
+                                <div class="mt-2 text-indigo-600 font-bold">5 Clips</div>
+                            </div>
+                            <div class="flex items-center justify-center text-stone-300 text-2xl">➜</div>
+                            <div class="p-4 bg-stone-50 rounded-lg border border-dashed border-stone-300">
+                                <div class="text-lg font-bold text-stone-700">Folder B</div>
+                                <div class="text-xs text-stone-500">Scene 2 (Body)</div>
+                                <div class="mt-2 text-indigo-600 font-bold">5 Clips</div>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 p-4 rounded-lg text-sm text-amber-800 border border-amber-100">
+                            <strong>เงื่อนไข:</strong> ต้องมีอย่างน้อย 2 โฟลเดอร์ และแต่ละโฟลเดอร์ต้องมีอย่างน้อย 2 คลิปย่อยเพื่อทำการสลับสับเปลี่ยนได้
+                        </div>
+                    </div>
+
+                    <!-- Step 2 Content -->
+                    <div id="content-step-2" class="step-content hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-indigo-100 rounded-full text-indigo-600 mb-4 text-2xl">🎨</div>
+                            <h3 class="text-2xl font-bold text-stone-900">ตั้งค่าพื้นฐาน (Settings)</h3>
+                            <p class="text-stone-500">กำหนดการตัดต่อและลักษณะข้อความ</p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                            <div>
+                                <h4 class="font-bold text-stone-700 mb-2">Text Customization</h4>
+                                <ul class="space-y-3 text-sm text-stone-600">
+                                    <li class="flex items-center"><span class="w-4 h-4 bg-green-500 rounded-full mr-2 flex-shrink-0"></span>Size: Fixed (คงที่)</li>
+                                    <li class="flex items-center"><span class="w-4 h-4 bg-indigo-500 rounded-full mr-2 flex-shrink-0"></span>Color: Random / Custom</li>
+                                    <li class="flex items-center"><span class="w-4 h-4 bg-indigo-500 rounded-full mr-2 flex-shrink-0"></span>Font: Random / Custom</li>
+                                </ul>
+                                <button onclick="randomizeDemo()" class="mt-6 w-full btn-primary px-4 py-2 rounded shadow text-sm">
+                                    ทดสอบปุ่ม "Randomize"
+                                </button>
+                            </div>
+                            <div class="bg-stone-900 rounded-lg p-6 flex items-center justify-center h-48 relative overflow-hidden">
+                                <div id="demoText" class="text-2xl font-bold text-white transition-all duration-300">
+                                    SAMPLE TEXT
+                                </div>
+                                <div class="absolute bottom-2 right-2 text-xs text-stone-500">Preview Area</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step 3 Content -->
+                    <div id="content-step-3" class="step-content hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-indigo-100 rounded-full text-indigo-600 mb-4 text-2xl">✨</div>
+                            <h3 class="text-2xl font-bold text-stone-900">เอฟเฟค & ตำแหน่ง (Visuals)</h3>
+                            <p class="text-stone-500">จัดวางองค์ประกอบให้สวยงาม</p>
+                        </div>
+
+                        <div class="bg-stone-100 p-6 rounded-lg mb-6 border border-stone-200">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="font-bold text-stone-700">Live Preview Mode</span>
+                                <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Active</span>
+                            </div>
+                            <p class="text-sm text-stone-600">
+                                โปรแกรมจะดึง <strong>คลิปตัวแรก</strong> ของแต่ละซีนมาแสดงทันที เพื่อให้คุณลากวางตำแหน่งข้อความและดูตัวอย่างเอฟเฟค Transition (มีให้เลือก 10+ แบบ)
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2 h-32">
+                             <div class="bg-stone-300 rounded animate-pulse flex items-center justify-center text-stone-500 text-xs">Scene 1 Preview</div>
+                             <div class="bg-stone-300 rounded animate-pulse flex items-center justify-center text-stone-500 text-xs">Transition ⚡</div>
+                             <div class="bg-stone-300 rounded animate-pulse flex items-center justify-center text-stone-500 text-xs">Scene 2 Preview</div>
+                        </div>
+                    </div>
+
+                    <!-- Step 4 Content -->
+                    <div id="content-step-4" class="step-content hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-indigo-100 rounded-full text-indigo-600 mb-4 text-2xl">🧮</div>
+                            <h3 class="text-2xl font-bold text-stone-900">การคำนวณ & ผลิต (Generation)</h3>
+                            <p class="text-stone-500">ระบบเลือกสุ่มอย่างชาญฉลาด</p>
+                        </div>
+
+                        <div class="chart-container mb-4">
+                            <canvas id="generationChart"></canvas>
+                        </div>
+
+                        <div class="text-sm text-stone-600 bg-indigo-50 p-4 rounded border border-indigo-100">
+                            <h5 class="font-bold text-indigo-900">Scenario:</h5>
+                            <p>สร้างได้สูงสุด <strong>90 คลิป</strong> แต่ลูกค้าต้องการ <strong>60 คลิป</strong></p>
+                            <p class="mt-2">➔ โปรแกรมจะ <strong>"สุ่มกระจาย"</strong> หยิบมา 60 แบบจาก 90 ความเป็นไปได้ เพื่อให้ได้ความหลากหลายสูงสุด ไม่ใช่แค่หยิบ 60 อันแรก</p>
+                        </div>
+                    </div>
+
+                    <!-- Step 5 Content -->
+                    <div id="content-step-5" class="step-content hidden">
+                        <div class="text-center mb-6">
+                            <div class="inline-block p-3 bg-indigo-100 rounded-full text-indigo-600 mb-4 text-2xl">💾</div>
+                            <h3 class="text-2xl font-bold text-stone-900">ส่งออก (Export)</h3>
+                            <p class="text-stone-500">ขั้นตอนสุดท้าย</p>
+                        </div>
+
+                        <div class="flex flex-col items-center justify-center space-y-4">
+                            <div class="w-full max-w-md p-4 bg-stone-50 border border-stone-200 rounded-lg flex items-center justify-between">
+                                <span class="text-sm font-medium text-stone-600">Output Folder:</span>
+                                <span class="text-sm text-stone-400 font-mono">D:/MyVideos/Export01</span>
+                            </div>
+                            
+                            <button class="bg-indigo-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-indigo-700 transition flex items-center space-x-2">
+                                <span>🚀 GENERATE VIDEO</span>
+                            </button>
+                            
+                            <p class="text-xs text-stone-400 mt-4">
+                                ระบบจะทำการตัดต่อ ใส่เอฟเฟค และเรนเดอร์ไฟล์ทั้งหมดโดยอัตโนมัติ
+                            </p>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis Section -->
+    <div id="analysis" class="bg-white py-16 border-t border-stone-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-extrabold text-stone-900">บทวิเคราะห์ประสิทธิภาพ</h2>
+                <p class="mt-4 text-lg text-stone-500">ทำไมต้องใช้ AI Auto-Assembler?</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
+                <!-- Efficiency Chart -->
+                <div>
+                    <h3 class="text-xl font-bold text-stone-800 mb-4 text-center">Production Volume Over Time</h3>
+                    <div class="chart-container">
+                        <canvas id="efficiencyChart"></canvas>
+                    </div>
+                    <p class="text-sm text-stone-500 mt-4 text-center">
+                        กราฟแสดงเปรียบเทียบปริมาณงานที่ได้ ระหว่างการตัดต่อด้วยมือ (สีเทา) และการใช้ AI (สีม่วง) ในระยะเวลาเท่ากัน
+                    </p>
+                </div>
+
+                <!-- Feature Highlights -->
+                <div class="grid grid-cols-1 gap-6">
+                    <div class="p-6 bg-stone-50 rounded-xl border border-stone-200 hover:shadow-md transition">
+                        <h4 class="text-lg font-bold text-indigo-600 mb-2">1. คุ้มค่าสูงสุด (High Value)</h4>
+                        <p class="text-stone-600">ใช้หลักการ Matrix Multiplication ทำให้ Input เพียงเล็กน้อย สร้าง Output ได้มหาศาล ประหยัดต้นทุนการถ่ายทำ</p>
+                    </div>
+                    <div class="p-6 bg-stone-50 rounded-xl border border-stone-200 hover:shadow-md transition">
+                        <h4 class="text-lg font-bold text-amber-600 mb-2">2. ไม่ซ้ำซาก (Unique)</h4>
+                        <p class="text-stone-600">การจับคู่คลิปที่ไม่ซ้ำกัน (Non-repetitive pairing) ผสานกับการสุ่มสีและฟอนต์ ทำให้ได้คอนเทนต์ที่ดูสดใหม่อยู่เสมอ</p>
+                    </div>
+                    <div class="p-6 bg-stone-50 rounded-xl border border-stone-200 hover:shadow-md transition">
+                        <h4 class="text-lg font-bold text-green-600 mb-2">3. ยืดหยุ่น (Flexible)</h4>
+                        <p class="text-stone-600">เลือกผลิตทั้งหมด (Generate All) หรือกำหนดจำนวนที่ต้องการ (Target Amount) แล้วให้ AI สุ่มคัดเลือกให้ก็ได้</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-stone-900 text-stone-400 py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <p class="text-white font-bold text-lg mb-4">AI Video Auto-Assembler</p>
+            <p class="text-sm">
+                Interactive SPA Concept generated based on Project Proposal.
+                <br>
+                Optimized for understanding workflow and value proposition.
+            </p>
+            <div class="mt-8 pt-8 border-t border-stone-800 text-xs">
+                © 2024 AI Assembler Project. No SVG or Mermaid JS used.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // --- State Management ---
+        const state = {
+            currentStep: 1,
+            sceneCount: 3,
+            clipCount: 10
+        };
+
+        // --- Matrix Simulator Logic ---
+        const sceneInput = document.getElementById('sceneInput');
+        const clipInput = document.getElementById('clipInput');
+        const sceneValue = document.getElementById('sceneValue');
+        const clipValue = document.getElementById('clipValue');
+        const totalOutput = document.getElementById('totalOutput');
+
+        function updateSimulation() {
+            const scenes = parseInt(sceneInput.value);
+            const clips = parseInt(clipInput.value);
+            
+            // Update UI Numbers
+            sceneValue.innerText = scenes;
+            clipValue.innerText = clips;
+
+            // Matrix Calculation: Clips ^ Scenes (Assuming equal clips per scene for simplicity in demo)
+            // Or strictly: Scene1 * Scene2 * Scene3 ...
+            // Let's use Clips ^ Scenes to demonstrate the power
+            const total = Math.pow(clips, scenes);
+            
+            // Format number with commas
+            totalOutput.innerText = total.toLocaleString();
+
+            state.sceneCount = scenes;
+            state.clipCount = clips;
+        }
+
+        sceneInput.addEventListener('input', updateSimulation);
+        clipInput.addEventListener('input', updateSimulation);
+
+        // --- Workflow Navigation Logic ---
+        function setStep(step) {
+            state.currentStep = step;
+            
+            // Update Buttons
+            for(let i=1; i<=5; i++) {
+                const btn = document.getElementById(`btn-step-${i}`);
+                if (i === step) {
+                    btn.classList.remove('step-inactive', 'hover:bg-stone-50');
+                    btn.classList.add('step-active');
+                } else {
+                    btn.classList.add('step-inactive', 'hover:bg-stone-50');
+                    btn.classList.remove('step-active');
+                }
+            }
+
+            // Update Content
+            const contents = document.querySelectorAll('.step-content');
+            contents.forEach(el => el.classList.add('hidden'));
+            document.getElementById(`content-step-${step}`).classList.remove('hidden');
+        }
+
+        // --- Randomization Demo Logic (Step 2) ---
+        function randomizeDemo() {
+            const colors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+            const fonts = ['sans-serif', 'serif', 'monospace', 'cursive'];
+            const demoText = document.getElementById('demoText');
+
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            const randomFont = fonts[Math.floor(Math.random() * fonts.length)];
+
+            demoText.style.color = randomColor;
+            demoText.style.fontFamily = randomFont;
+            
+            // Simple animation reset
+            demoText.classList.remove('opacity-100');
+            demoText.classList.add('opacity-50');
+            setTimeout(() => {
+                demoText.classList.remove('opacity-50');
+                demoText.classList.add('opacity-100');
+            }, 100);
+        }
+
+        // --- Charts Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // 1. Efficiency Chart (Line)
+            const ctxEfficiency = document.getElementById('efficiencyChart').getContext('2d');
+            new Chart(ctxEfficiency, {
+                type: 'line',
+                data: {
+                    labels: ['1 Hour', '2 Hours', '3 Hours', '4 Hours', '8 Hours'],
+                    datasets: [
+                        {
+                            label: 'Manual Editing (Human)',
+                            data: [2, 4, 6, 8, 16], // Linear, slow
+                            borderColor: '#9ca3af', // Gray
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'AI Assembler (Software)',
+                            data: [0, 50, 200, 500, 1500], // Exponential start then high volume
+                            borderColor: '#4f46e5', // Indigo
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    const item = tooltipItems[0];
+                                    let label = item.chart.data.labels[item.dataIndex];
+                                    if (Array.isArray(label)) {
+                                        return label.join(' ');
+                                    } else {
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Videos Produced'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Generation Logic Chart (Pie/Doughnut) - Step 4
+            const ctxGen = document.getElementById('generationChart').getContext('2d');
+            new Chart(ctxGen, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Selected Videos (Output)', 'Remaining Possibilities (Unused)'],
+                    datasets: [{
+                        data: [60, 30], // Example: 60 selected from 90 total
+                        backgroundColor: [
+                            '#4f46e5', // Indigo (Selected)
+                            '#e5e7eb'  // Gray (Remaining)
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        },
+                        title: {
+                            display: true,
+                            text: 'Example: Target 60 / Total 90'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    const item = tooltipItems[0];
+                                    let label = item.chart.data.labels[item.dataIndex];
+                                    if (Array.isArray(label)) {
+                                        return label.join(' ');
+                                    } else {
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

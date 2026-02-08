@@ -2,7 +2,8 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- FIX: บังคับ Viewport เป็น 1280px เพื่อให้แสดงผลแบบ Desktop บนทุกอุปกรณ์ แล้วย่อให้พอดีจอ -->
+    <meta name="viewport" content="width=1280, user-scalable=yes">
     <title>AI Video Auto-Assembler - Interactive Experience</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -14,7 +15,7 @@
             font-family: 'Sarabun', sans-serif;
             margin: 0;
             padding: 0;
-            overflow-x: hidden;
+            overflow-x: hidden; /* ป้องกัน scroll แนวนอนส่วนเกิน */
         }
 
         /* --- WEBSITE MODE STYLES --- */
@@ -33,6 +34,15 @@
             margin: 0 auto;
         }
 
+        .step-active-web {
+            border-left: 4px solid #4f46e5;
+            background-color: #eef2ff;
+        }
+        
+        .step-inactive-web {
+            border-left: 4px solid transparent;
+        }
+
         .btn-primary-web {
             background-color: #4f46e5;
             color: white;
@@ -43,7 +53,7 @@
             transform: translateY(-1px);
         }
 
-        /* --- APP SIMULATION MODE STYLES (WPF Mockup Responsive) --- */
+        /* --- APP SIMULATION MODE STYLES (WPF Mockup) --- */
         #view-simulation {
             font-family: 'Segoe UI', 'Sarabun', sans-serif;
             background-color: #3f3f46;
@@ -58,14 +68,13 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            padding: 10px; /* Add padding for mobile edges */
+            /* Initially Hidden controlled by JS class */
+            overflow: hidden; /* ป้องกัน scroll bar ซ้อน */
         }
 
         .wpf-window {
-            width: 100%;
-            height: 100%;
-            max-width: 1100px;
-            max-height: 750px;
+            width: 1100px;
+            height: 750px;
             background-color: #f3f4f6;
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
             border: 1px solid #6b7280;
@@ -74,6 +83,8 @@
             border-radius: 4px;
             overflow: hidden;
             position: relative;
+            /* Default scale origin for JS resizing */
+            transform-origin: center center;
         }
 
         .title-bar {
@@ -85,60 +96,19 @@
             justify-content: space-between;
             padding-left: 12px;
             font-size: 13px;
-            flex-shrink: 0;
         }
 
-        /* Responsive Sidebar */
         .sidebar {
+            width: 240px;
             background-color: #e5e7eb;
             border-right: 1px solid #d1d5db;
             display: flex;
-            flex-shrink: 0;
-        }
-        
-        /* Mobile: Horizontal Scroll Sidebar */
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 100%;
-                flex-direction: row;
-                overflow-x: auto;
-                border-right: none;
-                border-bottom: 1px solid #d1d5db;
-                height: auto;
-            }
-            .nav-item {
-                white-space: nowrap;
-                padding: 10px 15px;
-                border-bottom: none !important;
-                border-right: 1px solid #e5e7eb;
-            }
-            .nav-item.active {
-                border-left: none !important;
-                border-bottom: 3px solid #2563eb !important;
-            }
-            .sidebar-header, .sidebar-footer {
-                display: none; /* Hide header/footer on mobile sidebar to save space */
-            }
-        }
-
-        /* Desktop: Vertical Sidebar */
-        @media (min-width: 769px) {
-            .sidebar {
-                width: 240px;
-                flex-direction: column;
-                height: 100%;
-            }
-            .nav-item {
-                padding: 12px 20px;
-                border-bottom: 1px solid #e5e7eb;
-            }
-            .nav-item.active {
-                border-left: 4px solid #2563eb;
-                border-bottom: 1px solid #e5e7eb;
-            }
+            flex-direction: column;
         }
 
         .nav-item {
+            padding: 12px 20px;
+            border-bottom: 1px solid #e5e7eb;
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
@@ -149,12 +119,13 @@
         .nav-item.active {
             background-color: #ffffff;
             color: #2563eb;
+            border-left: 4px solid #2563eb;
             font-weight: 600;
         }
 
         .main-content {
             flex: 1;
-            padding: 16px;
+            padding: 24px;
             background-color: #ffffff;
             overflow-y: auto;
             position: relative;
@@ -237,7 +208,6 @@
             align-items: center;
             padding: 0 12px;
             font-size: 12px;
-            flex-shrink: 0;
         }
 
         /* Utilities */
@@ -256,53 +226,35 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between h-16 items-center">
                     <div class="flex items-center">
-                        <span class="text-xl md:text-2xl font-bold text-indigo-600 truncate">Video Auto Assembler</span>
+                        <span class="text-2xl font-bold text-indigo-600">Video Auto Assembler Program</span>
                     </div>
-                    <!-- Desktop Menu -->
-                    <div class="hidden md:flex space-x-8 items-center">
+                    <!-- FIX: ลบ hidden md:flex เพื่อให้แสดงเมนูตลอดเวลาเหมือน Desktop -->
+                    <div class="flex space-x-8 items-center">
                         <a href="#simulator" class="text-stone-500 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Simulation</a>
                         <a href="#workflow" class="text-stone-500 hover:text-indigo-600 px-3 py-2 text-sm font-medium">Workflow</a>
                         <button onclick="switchMode('app')" class="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-4 py-2 rounded-lg text-sm font-bold transition">
                             🖥️ เปิดโปรแกรมจำลอง
                         </button>
                     </div>
-                    <!-- Mobile Menu Button -->
-                    <div class="flex md:hidden">
-                        <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="text-stone-500 hover:text-indigo-600 p-2">
-                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <!-- Mobile Menu Dropdown -->
-            <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-stone-200">
-                <div class="px-2 pt-2 pb-3 space-y-1">
-                    <a href="#simulator" class="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-indigo-600 hover:bg-stone-50">Simulation</a>
-                    <a href="#workflow" class="block px-3 py-2 rounded-md text-base font-medium text-stone-700 hover:text-indigo-600 hover:bg-stone-50">Workflow</a>
-                    <button onclick="switchMode('app')" class="w-full text-left block px-3 py-2 rounded-md text-base font-bold text-indigo-700 bg-indigo-50">
-                        🖥️ เปิดโปรแกรมจำลอง
-                    </button>
                 </div>
             </div>
         </nav>
 
         <!-- Hero Section -->
-        <div class="bg-stone-50 py-12 md:py-24 border-b border-stone-200">
+        <div class="bg-stone-50 py-16 sm:py-24 border-b border-stone-200">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                <h1 class="text-3xl md:text-5xl lg:text-6xl font-extrabold text-stone-900 tracking-tight">
+                <h1 class="text-4xl font-extrabold text-stone-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
                     โปรแกรมตัดต่อวีดีโออัตโนมัติ
-                    <span class="block text-indigo-600 mt-2">AI Video Auto-Assembler</span>
+                    <span class="block text-indigo-600">AI Video Auto-Assembler</span>
                 </h1>
-                <p class="mt-4 max-w-2xl mx-auto text-lg md:text-xl text-stone-500 px-4">
+                <p class="mt-4 max-w-2xl mx-auto text-xl text-stone-500">
                     เปลี่ยนคลิปต้นฉบับเพียงไม่กี่ไฟล์ ให้กลายเป็นวีดีโอใหม่นับร้อยนับพัน ด้วยพลังการจับคู่แบบ Matrix Combination
                 </p>
-                <div class="mt-8 flex flex-col md:flex-row justify-center gap-4 px-4">
-                    <button onclick="switchMode('app')" class="btn-primary-web px-6 py-3 rounded-lg text-lg font-medium shadow-lg flex items-center justify-center gap-2">
-                        <span>▶</span> ทดลองใช้งานโปรแกรมจำลอง
+                <div class="mt-8 flex justify-center gap-4">
+                    <button onclick="switchMode('app')" class="btn-primary-web px-8 py-3 rounded-lg text-lg font-medium shadow-lg flex items-center gap-2">
+                        <span>▶</span> ทดลองใช้งานโปรแกรมจำลอง (App Demo)
                     </button>
-                    <a href="#workflow" class="bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 px-6 py-3 rounded-lg text-lg font-medium transition shadow-sm flex items-center justify-center">
+                    <a href="#workflow" class="bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 px-8 py-3 rounded-lg text-lg font-medium transition shadow-sm">
                         ดูขั้นตอนการทำงาน
                     </a>
                 </div>
@@ -310,18 +262,18 @@
         </div>
 
         <!-- Matrix Simulator (Web Version) -->
-        <div id="simulator" class="bg-white py-12 md:py-16">
+        <div id="simulator" class="bg-white py-16">
             <div class="max-w-5xl mx-auto px-4">
-                <div class="text-center mb-8 md:mb-12">
+                <div class="text-center mb-12">
                     <h2 class="text-base text-indigo-600 font-semibold tracking-wide uppercase">Core Technology</h2>
-                    <p class="mt-2 text-2xl md:text-4xl font-extrabold text-stone-900">
+                    <p class="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-stone-900 sm:text-4xl">
                         หลักการคำนวณแบบ Matrix
                     </p>
                 </div>
 
                 <div class="bg-stone-50 rounded-2xl shadow-lg border border-stone-200 overflow-hidden">
                     <div class="grid grid-cols-1 md:grid-cols-2">
-                        <div class="p-6 md:p-8">
+                        <div class="p-8">
                             <h3 class="text-lg font-medium text-stone-900 mb-6">ลองตั้งค่าตัวแปร</h3>
                             <div class="mb-6">
                                 <label class="block text-sm font-medium text-stone-700 mb-2">จำนวนซีน (Folders)</label>
@@ -341,7 +293,7 @@
 
                         <div class="bg-indigo-600 p-8 flex flex-col justify-center items-center text-center text-white">
                             <h3 class="text-indigo-200 text-sm uppercase tracking-wider font-semibold mb-2">Total Unique Videos</h3>
-                            <div id="webTotalOutput" class="text-5xl md:text-6xl font-extrabold mb-2">1,000</div>
+                            <div id="webTotalOutput" class="text-6xl font-extrabold mb-2">1,000</div>
                             <p class="text-indigo-200 text-sm">วีดีโอที่ไม่ซ้ำกันเลย</p>
                         </div>
                     </div>
@@ -350,13 +302,13 @@
         </div>
 
         <!-- Workflow Section -->
-        <div id="workflow" class="py-12 md:py-16 bg-stone-50">
+        <div id="workflow" class="py-16 bg-stone-50">
             <div class="max-w-7xl mx-auto px-4">
-                <div class="text-center mb-8 md:mb-12">
-                    <h2 class="text-2xl md:text-3xl font-extrabold text-stone-900">5 ขั้นตอนการทำงาน</h2>
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl font-extrabold text-stone-900">5 ขั้นตอนการทำงาน</h2>
                 </div>
-                <!-- Simple Steps Visualization for Web View -->
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+                <!-- Simple Steps Visualization for Web View (Desktop Layout forced) -->
+                <div class="grid grid-cols-5 gap-4 text-center">
                     <div class="p-4 bg-white rounded shadow-sm">
                         <div class="text-2xl mb-2">📂</div>
                         <div class="font-bold">1. Import</div>
@@ -377,7 +329,7 @@
                         <div class="font-bold">4. Matrix</div>
                         <div class="text-xs text-gray-500">คำนวณยอด</div>
                     </div>
-                    <div class="p-4 bg-white rounded shadow-sm col-span-2 md:col-span-1">
+                    <div class="p-4 bg-white rounded shadow-sm">
                         <div class="text-2xl mb-2">🚀</div>
                         <div class="font-bold">5. Export</div>
                         <div class="text-xs text-gray-500">ผลิตวีดีโอ</div>
@@ -385,7 +337,7 @@
                 </div>
                 <div class="text-center mt-12">
                     <p class="text-stone-500 mb-6">หากต้องการเห็นภาพการทำงานจริง กดปุ่มด้านล่าง</p>
-                    <button onclick="switchMode('app')" class="btn-primary-web px-8 py-3 rounded-lg text-lg font-medium shadow-lg w-full md:w-auto">
+                    <button onclick="switchMode('app')" class="btn-primary-web px-8 py-3 rounded-lg text-lg font-medium shadow-lg">
                         เข้าสู่โหมดจำลองโปรแกรม (Demo)
                     </button>
                 </div>
@@ -393,9 +345,9 @@
         </div>
 
         <!-- Efficiency Section -->
-        <div class="py-12 md:py-16 bg-white">
+        <div class="py-16 bg-white">
             <div class="max-w-4xl mx-auto px-4 text-center">
-                <h2 class="text-2xl md:text-3xl font-extrabold text-stone-900 mb-8">ประสิทธิภาพเทียบกับการทำมือ</h2>
+                <h2 class="text-3xl font-extrabold text-stone-900 mb-8">ประสิทธิภาพเทียบกับการทำมือ</h2>
                 <div class="chart-container-web">
                     <canvas id="efficiencyChart"></canvas>
                 </div>
@@ -410,25 +362,25 @@
 
 
     <!-- ========================================================================= -->
-    <!-- VIEW 2: APP SIMULATION (WPF Mockup - Responsive) -->
+    <!-- VIEW 2: APP SIMULATION (WPF Mockup) -->
     <!-- ========================================================================= -->
     <div id="view-simulation" class="hidden">
         
-        <!-- Back Button Overlay (Floating on Mobile) -->
-        <div class="absolute top-2 left-2 z-50 md:top-6 md:left-6">
-            <button onclick="switchMode('website')" class="bg-white/90 backdrop-blur text-stone-800 hover:bg-stone-100 px-3 py-1.5 md:px-4 md:py-2 rounded shadow-md font-bold flex items-center gap-2 border border-gray-300 text-xs md:text-sm transition-transform hover:scale-105">
-                <span>⬅</span> <span class="hidden md:inline">กลับสู่หน้าเว็บไซต์</span><span class="md:hidden">ออก</span>
+        <!-- Back Button Overlay -->
+        <div class="absolute top-6 left-6 z-50">
+            <button onclick="switchMode('website')" class="bg-white text-stone-800 hover:bg-stone-100 px-4 py-2 rounded shadow-md font-bold flex items-center gap-2 border border-gray-300 transition-transform hover:scale-105">
+                <span>⬅</span> กลับสู่หน้าเว็บไซต์ (Exit Demo)
             </button>
         </div>
 
-        <!-- WPF Window -->
-        <div class="wpf-window">
+        <!-- WPF Window (Fixed Size originally, but scaled via JS) -->
+        <div class="wpf-window" id="appWindow">
             
             <!-- Title Bar -->
-            <div class="title-bar pl-16 md:pl-4"> <!-- Padding left for Back button -->
-                <div class="flex items-center gap-2 truncate">
+            <div class="title-bar">
+                <div class="flex items-center gap-2">
                     <span style="font-size: 14px;">🎬</span>
-                    <span class="truncate">AI Video Auto-Assembler Pro (Thai)</span>
+                    <span>AI Video Auto-Assembler Pro v1.0 (Thai Edition)</span>
                 </div>
                 <div class="window-controls flex">
                     <div class="text-gray-400">─</div>
@@ -437,30 +389,30 @@
                 </div>
             </div>
 
-            <!-- Main Layout (Responsive SplitView: Col on Mobile, Row on Desktop) -->
-            <div class="flex flex-col md:flex-row flex-1 overflow-hidden">
+            <!-- Main Layout (SplitView) -->
+            <div class="flex flex-1 overflow-hidden">
                 
-                <!-- Sidebar Navigation (Top Scroll on Mobile, Left on Desktop) -->
+                <!-- Sidebar Navigation -->
                 <div class="sidebar">
-                    <div class="sidebar-header p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ขั้นตอนการทำงาน</div>
+                    <div class="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">ขั้นตอนการทำงาน</div>
                     
                     <div onclick="setAppStep(1)" id="nav-step-1" class="nav-item active">
-                        <span class="mr-2 md:mr-3">1️⃣</span> <span class="text-sm">Import</span>
+                        <span class="mr-3">1️⃣</span> นำเข้าซีน (Import)
                     </div>
                     <div onclick="setAppStep(2)" id="nav-step-2" class="nav-item">
-                        <span class="mr-2 md:mr-3">2️⃣</span> <span class="text-sm">Settings</span>
+                        <span class="mr-3">2️⃣</span> ตั้งค่าคลิป (Settings)
                     </div>
                     <div onclick="setAppStep(3)" id="nav-step-3" class="nav-item">
-                        <span class="mr-2 md:mr-3">3️⃣</span> <span class="text-sm">Visuals</span>
+                        <span class="mr-3">3️⃣</span> จัดวาง & เอฟเฟค
                     </div>
                     <div onclick="setAppStep(4)" id="nav-step-4" class="nav-item">
-                        <span class="mr-2 md:mr-3">4️⃣</span> <span class="text-sm">Matrix</span>
+                        <span class="mr-3">4️⃣</span> คำนวณยอด (Matrix)
                     </div>
                     <div onclick="setAppStep(5)" id="nav-step-5" class="nav-item">
-                        <span class="mr-2 md:mr-3">5️⃣</span> <span class="text-sm">Export</span>
+                        <span class="mr-3">5️⃣</span> ส่งออกไฟล์ (Export)
                     </div>
 
-                    <div class="sidebar-footer mt-auto p-4 border-t border-gray-300 bg-gray-100">
+                    <div class="mt-auto p-4 border-t border-gray-300 bg-gray-100">
                         <div class="text-xs text-gray-500 mb-1">สถานะโปรเจกต์</div>
                         <div class="h-2 bg-gray-300 rounded-full overflow-hidden">
                             <div id="projectProgress" class="h-full bg-blue-600 w-1/5 transition-all duration-500"></div>
@@ -473,50 +425,46 @@
                 <div class="main-content">
                     
                     <!-- STEP 1: Import -->
-                    <div id="view-step-1" class="step-view flex flex-col h-full">
-                        <h2 class="text-lg md:text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 1: นำเข้า (Import)</h2>
+                    <div id="view-step-1" class="step-view">
+                        <h2 class="text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 1: นำเข้าโฟลเดอร์ซีน (Import)</h2>
                         
-                        <div class="flex flex-col md:flex-row gap-4 flex-1 overflow-hidden min-h-0">
-                            <!-- Folder Tree -->
-                            <div class="w-full md:w-1/3 flex flex-col gap-2 shrink-0 h-1/3 md:h-full">
+                        <div class="flex gap-4 h-[500px]">
+                            <div class="w-1/3 flex flex-col gap-2">
                                 <button class="wpf-button w-full text-left">+ เพิ่มโฟลเดอร์ซีน</button>
                                 <div class="border border-gray-400 bg-white flex-1 p-2 overflow-y-auto">
                                     <div class="font-bold text-sm mb-2 text-gray-600">ไฟล์ในโปรเจกต์</div>
                                     <div class="pl-2 border-l border-gray-300 ml-2 space-y-1 text-sm">
-                                        <div class="flex items-center text-blue-600 cursor-pointer bg-blue-50 p-1">📁 ซีน 1: Intro <span class="ml-auto text-xs text-gray-400">[5]</span></div>
-                                        <div class="flex items-center text-gray-700 cursor-pointer p-1 hover:bg-gray-50">📁 ซีน 2: Product <span class="ml-auto text-xs text-gray-400">[5]</span></div>
-                                        <div class="flex items-center text-gray-700 cursor-pointer p-1 hover:bg-gray-50">📁 ซีน 3: Outro <span class="ml-auto text-xs text-gray-400">[4]</span></div>
+                                        <div class="flex items-center text-blue-600 cursor-pointer bg-blue-50 p-1">📁 ซีนที่ 1: Intro <span class="ml-auto text-xs text-gray-400">[5 คลิป]</span></div>
+                                        <div class="flex items-center text-gray-700 cursor-pointer p-1 hover:bg-gray-50">📁 ซีนที่ 2: Product <span class="ml-auto text-xs text-gray-400">[5 คลิป]</span></div>
+                                        <div class="flex items-center text-gray-700 cursor-pointer p-1 hover:bg-gray-50">📁 ซีนที่ 3: Outro <span class="ml-auto text-xs text-gray-400">[4 คลิป]</span></div>
                                     </div>
                                 </div>
                             </div>
-                            <!-- Clip List -->
-                            <div class="w-full md:w-2/3 flex flex-col h-2/3 md:h-full">
+                            <div class="w-2/3 flex flex-col">
                                 <div class="mb-2 flex justify-between items-center">
-                                    <span class="text-sm font-bold truncate">ซีนที่ 1: Intro</span>
-                                    <span class="text-xs text-gray-500">5 รายการ</span>
+                                    <span class="text-sm font-bold">ไฟล์ใน "ซีนที่ 1: Intro"</span>
+                                    <span class="text-xs text-gray-500">เลือกอยู่ 5 รายการ</span>
                                 </div>
-                                <div class="flex-1 overflow-auto border border-gray-400 mb-2">
-                                    <table class="wpf-datagrid">
-                                        <thead><tr><th>ชื่อไฟล์</th><th>ความยาว</th><th>สถานะ</th></tr></thead>
-                                        <tbody>
-                                            <tr class="selected"><td>intro_01.mp4</td><td>00:05</td><td>✅</td></tr>
-                                            <tr><td>intro_02.mp4</td><td>00:04</td><td>✅</td></tr>
-                                            <tr><td>intro_03.mp4</td><td>00:06</td><td>✅</td></tr>
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="bg-black h-32 md:h-48 flex items-center justify-center text-gray-500 border border-gray-600 text-xs md:text-base shrink-0">[Preview Video]</div>
+                                <table class="wpf-datagrid">
+                                    <thead><tr><th>ชื่อไฟล์</th><th>ความยาว</th><th>สถานะ</th></tr></thead>
+                                    <tbody>
+                                        <tr class="selected"><td>intro_01.mp4</td><td>00:05</td><td>✅ พร้อม</td></tr>
+                                        <tr><td>intro_02.mp4</td><td>00:04</td><td>✅ พร้อม</td></tr>
+                                        <tr><td>intro_03.mp4</td><td>00:06</td><td>✅ พร้อม</td></tr>
+                                    </tbody>
+                                </table>
+                                <div class="mt-4 bg-black h-48 flex items-center justify-center text-gray-500 border border-gray-600">[ส่วนแสดงตัวอย่างวีดีโอ]</div>
                             </div>
                         </div>
-                        <div class="mt-4 flex justify-end shrink-0">
+                        <div class="mt-4 flex justify-end">
                             <button onclick="setAppStep(2)" class="wpf-button wpf-button-primary">ถัดไป: ตั้งค่า ➜</button>
                         </div>
                     </div>
 
                     <!-- STEP 2: Settings -->
-                    <div id="view-step-2" class="step-view hidden flex flex-col h-full">
-                        <h2 class="text-lg md:text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 2: ตั้งค่า (Settings)</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 flex-1 overflow-y-auto">
+                    <div id="view-step-2" class="step-view hidden">
+                        <h2 class="text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 2: ตั้งค่าคลิป & ข้อความ</h2>
+                        <div class="grid grid-cols-2 gap-6">
                             <div class="wpf-group-box">
                                 <span class="wpf-group-header">การตัดหัว-ท้ายคลิป</span>
                                 <div class="space-y-4 mt-2">
@@ -528,96 +476,172 @@
                                 <span class="wpf-group-header">ตั้งค่าข้อความ</span>
                                 <div class="space-y-4 mt-2">
                                     <div><label class="block text-sm mb-1">ขนาดฟอนต์ (คงที่)</label><input type="number" class="wpf-input" value="48" disabled bg-gray-100></div>
-                                    <div class="border-t pt-2 mt-2"><label class="text-sm font-bold">รูปแบบฟอนต์</label><div class="flex items-center gap-1"><input type="checkbox" checked> <span class="text-xs">สุ่ม (Random)</span></div></div>
+                                    <!-- UPDATED: Font Selection with Custom & Import -->
+                                    <div class="border-t pt-2 mt-2">
+                                        <label class="text-sm font-bold mb-1 block">รูปแบบฟอนต์ (Font Family)</label>
+                                        <div class="flex flex-col gap-2">
+                                            <div class="flex items-center gap-4 text-xs">
+                                                <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="fontMode" checked> สุ่ม (Random)</label>
+                                                <label class="flex items-center gap-1 cursor-pointer"><input type="radio" name="fontMode"> กำหนดเอง (Custom)</label>
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <select class="wpf-input flex-1">
+                                                    <option>Sarabun (Default)</option>
+                                                    <option>Kanit</option>
+                                                    <option>Prompt</option>
+                                                </select>
+                                                <button class="wpf-button px-2 flex items-center gap-1">
+                                                    📂 Import...
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div class="border-t pt-2 mt-2"><label class="text-sm font-bold">สีข้อความ</label><div class="flex items-center gap-1"><input type="checkbox" checked> <span class="text-xs">สุ่ม (Random)</span></div></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-auto flex justify-between pt-4 shrink-0">
+                        <div class="mt-auto flex justify-between pt-4">
                             <button onclick="setAppStep(1)" class="wpf-button">⬅ ย้อนกลับ</button>
                             <button onclick="setAppStep(3)" class="wpf-button wpf-button-primary">ถัดไป: จัดวาง ➜</button>
                         </div>
                     </div>
 
                     <!-- STEP 3: Visuals -->
-                    <div id="view-step-3" class="step-view hidden flex flex-col h-full">
-                        <h2 class="text-lg md:text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 3: จัดวาง (Visuals)</h2>
-                        <div class="flex flex-col md:flex-row gap-4 flex-1 overflow-hidden">
-                            <div class="w-full md:w-1/3 space-y-4 shrink-0 overflow-y-auto max-h-[150px] md:max-h-full">
+                    <div id="view-step-3" class="step-view hidden">
+                        <h2 class="text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 3: จัดวาง & เอฟเฟค</h2>
+                        <div class="flex gap-4 h-[450px]">
+                            <!-- Controls -->
+                            <div class="w-1/3 flex flex-col gap-4">
                                 <div class="wpf-group-box">
                                     <span class="wpf-group-header">เลือกซีน</span>
                                     <select class="wpf-input"><option>ซีนที่ 1: Intro</option><option>ซีนที่ 2: Product</option></select>
                                 </div>
-                                <div class="wpf-group-box">
-                                    <span class="wpf-group-header">เอฟเฟค</span>
-                                    <select class="wpf-input"><option>Fade</option><option>Slide</option><option>Random</option></select>
+                                <!-- UPDATED: Text Layers & Background -->
+                                <div class="wpf-group-box flex-1 flex flex-col">
+                                    <span class="wpf-group-header">จัดการข้อความ (Text Layers)</span>
+                                    <!-- Layer List -->
+                                    <div class="border border-gray-300 bg-white h-24 mb-2 p-1 overflow-y-auto text-sm">
+                                        <div class="bg-blue-100 p-1 mb-1 cursor-pointer border border-blue-300 flex justify-between items-center">
+                                            <span class="font-bold">T1: "Title Text"</span>
+                                            <span class="text-xs text-blue-600">Selected</span>
+                                        </div>
+                                        <div class="p-1 mb-1 cursor-pointer hover:bg-gray-50 flex justify-between items-center text-gray-500">
+                                            <span>T2: "Subtitle"</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Add/Remove Buttons -->
+                                    <div class="flex gap-2 mb-4">
+                                        <button class="wpf-button w-full text-xs font-bold text-green-700">+ เพิ่ม Layer</button>
+                                        <button class="wpf-button w-full text-xs text-red-600">- ลบ</button>
+                                    </div>
+
+                                    <!-- Per-Layer Settings -->
+                                    <div class="border-t pt-2 mt-auto">
+                                        <div class="text-xs font-bold text-gray-700 mb-2">ตั้งค่าพื้นหลัง (Layer: T1)</div>
+                                        
+                                        <div class="flex items-center gap-2 mb-2">
+                                            <input type="checkbox" id="textBgCheck" checked>
+                                            <label for="textBgCheck" class="text-sm cursor-pointer">เปิดใช้งานพื้นหลัง</label>
+                                        </div>
+
+                                        <div class="pl-4 border-l-2 border-gray-200">
+                                            <div class="text-xs mb-1">โหมดสี:</div>
+                                            <div class="flex gap-2 mb-2 text-xs">
+                                                <label class="flex items-center gap-1"><input type="radio" name="bgMode" > สีเดียว</label>
+                                                <label class="flex items-center gap-1"><input type="radio" name="bgMode" checked> สุ่ม (Random)</label>
+                                            </div>
+
+                                            <!-- Random Config UI -->
+                                            <div class="bg-gray-100 p-2 rounded border border-gray-200">
+                                                <div class="text-xs text-gray-500 mb-1">Palette สำหรับ T1 (ขั้นต่ำ 2 สี):</div>
+                                                <div class="flex flex-wrap gap-1 mb-2">
+                                                    <div class="w-5 h-5 rounded bg-black border border-gray-300 relative group cursor-pointer" title="Black"></div>
+                                                    <div class="w-5 h-5 rounded bg-red-600 border border-gray-300 relative group cursor-pointer" title="Red"></div>
+                                                    <div class="w-5 h-5 rounded bg-blue-600 border border-gray-300 relative group cursor-pointer" title="Blue"></div>
+                                                </div>
+                                                <div class="flex gap-1">
+                                                    <input type="color" class="w-6 h-6 p-0 border-0" value="#10b981">
+                                                    <button class="text-[10px] bg-white border px-2 rounded hover:bg-gray-50">+ เพิ่มสี</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="w-full md:w-2/3 bg-gray-800 relative flex items-center justify-center border-2 border-gray-600 shadow-inner overflow-hidden min-h-[200px] flex-1">
-                                <div class="text-gray-600 font-bold text-4xl md:text-6xl opacity-20 select-none">VIDEO</div>
-                                <div class="absolute border-2 border-dashed border-yellow-400 p-2 cursor-move bg-black/30 text-white font-bold text-lg md:text-2xl">ตัวอย่างข้อความ</div>
+                            <!-- WYSIWYG Editor -->
+                            <div class="w-2/3 bg-gray-800 relative flex items-center justify-center border-2 border-gray-600 shadow-inner overflow-hidden">
+                                <div class="text-gray-600 font-bold text-6xl opacity-20 select-none">VIDEO</div>
+                                
+                                <!-- Updated Preview with Background -->
+                                <div class="absolute border-2 border-dashed border-yellow-400 p-2 cursor-move bg-black/50 text-white font-bold text-3xl" style="top: 40%; left: 50%; transform: translate(-50%, -50%);">
+                                    ตัวอย่างข้อความ (T1)
+                                    <div class="absolute -top-3 -right-3 w-4 h-4 bg-yellow-400 rounded-full"></div>
+                                </div>
+                                <!-- Second Text Layer Preview -->
+                                <div class="absolute border border-dashed border-gray-400 p-1 cursor-move text-white font-bold text-xl" style="top: 70%; left: 50%; transform: translate(-50%, -50%);">
+                                    Subtitle (T2)
+                                </div>
+
+                                <div class="absolute bottom-2 right-2 flex gap-2">
+                                    <button class="bg-gray-700 text-white text-xs px-2 py-1 rounded opacity-75 hover:opacity-100">Reset Position</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="mt-auto flex justify-between pt-4 shrink-0">
+                        <div class="mt-auto flex justify-between pt-4">
                             <button onclick="setAppStep(2)" class="wpf-button">⬅ ย้อนกลับ</button>
                             <button onclick="setAppStep(4)" class="wpf-button wpf-button-primary">ถัดไป: คำนวณ ➜</button>
                         </div>
                     </div>
 
                     <!-- STEP 4: Matrix -->
-                    <div id="view-step-4" class="step-view hidden flex flex-col h-full">
-                        <h2 class="text-lg md:text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 4: คำนวณ (Matrix)</h2>
-                        <div class="flex flex-col items-center justify-center flex-1 overflow-y-auto">
-                            <!-- Matrix Viz (Wraps on mobile) -->
-                            <div class="flex flex-wrap items-center justify-center gap-2 md:gap-4 mb-8">
-                                <div class="bg-white p-2 md:p-4 border rounded text-center w-24 md:w-32"><div class="text-xl md:text-2xl font-bold">5</div><div class="text-[10px] md:text-xs">ซีน 1</div></div>
+                    <div id="view-step-4" class="step-view hidden">
+                        <h2 class="text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 4: คำนวณยอดผลิต</h2>
+                        <div class="flex flex-col items-center justify-center h-[450px]">
+                            <div class="flex items-center gap-4 mb-8">
+                                <div class="bg-white p-4 border rounded text-center w-32"><div class="text-2xl font-bold">5</div><div class="text-xs">ซีน 1</div></div>
                                 <div class="text-xl font-bold">×</div>
-                                <div class="bg-white p-2 md:p-4 border rounded text-center w-24 md:w-32"><div class="text-xl md:text-2xl font-bold">5</div><div class="text-[10px] md:text-xs">ซีน 2</div></div>
+                                <div class="bg-white p-4 border rounded text-center w-32"><div class="text-2xl font-bold">5</div><div class="text-xs">ซีน 2</div></div>
                                 <div class="text-xl font-bold">×</div>
-                                <div class="bg-white p-2 md:p-4 border rounded text-center w-24 md:w-32"><div class="text-xl md:text-2xl font-bold">4</div><div class="text-[10px] md:text-xs">ซีน 3</div></div>
-                                <div class="text-xl font-bold md:hidden text-center w-full">↓</div> <!-- Break on mobile -->
-                                <div class="text-xl font-bold hidden md:block">=</div>
-                                <div class="bg-blue-50 p-2 md:p-4 border border-blue-200 text-center w-32 md:w-40"><div class="text-2xl md:text-3xl font-bold text-blue-600">100</div><div class="text-[10px] md:text-xs font-bold uppercase">จำนวนสูงสุด</div></div>
+                                <div class="bg-white p-4 border rounded text-center w-32"><div class="text-2xl font-bold">4</div><div class="text-xs">ซีน 3</div></div>
+                                <div class="text-xl font-bold">=</div>
+                                <div class="bg-blue-50 p-4 border border-blue-200 text-center w-40"><div class="text-3xl font-bold text-blue-600">100</div><div class="text-xs font-bold uppercase">จำนวนสูงสุด</div></div>
                             </div>
-                            
-                            <div class="wpf-group-box w-full md:w-2/3">
+                            <div class="wpf-group-box w-2/3">
                                 <span class="wpf-group-header">เป้าหมายการผลิต</span>
                                 <div class="space-y-4 mt-2">
-                                    <div class="flex items-center gap-2"><input type="radio" name="genMode" checked> <label class="text-sm">ระบุจำนวนที่ต้องการ</label></div>
-                                    <div class="pl-6 flex items-center gap-2">
-                                        <input type="number" class="wpf-input w-24 md:w-32" value="60"> 
-                                        <span class="text-sm text-gray-500">วีดีโอ</span>
-                                    </div>
+                                    <div class="flex items-center gap-2"><input type="radio" name="genMode" checked> <label>ระบุจำนวนที่ต้องการ (สุ่มเลือกไม่ซ้ำ)</label></div>
+                                    <div class="pl-6"><input type="number" class="wpf-input w-32" value="60"> <span class="text-sm text-gray-500">วีดีโอ</span></div>
                                 </div>
                             </div>
                         </div>
-                        <div class="mt-auto flex justify-between pt-4 shrink-0">
+                        <div class="mt-auto flex justify-between pt-4">
                             <button onclick="setAppStep(3)" class="wpf-button">⬅ ย้อนกลับ</button>
                             <button onclick="setAppStep(5)" class="wpf-button wpf-button-primary">ถัดไป: ส่งออก ➜</button>
                         </div>
                     </div>
 
                     <!-- STEP 5: Export -->
-                    <div id="view-step-5" class="step-view hidden flex flex-col h-full">
-                        <h2 class="text-lg md:text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 5: ส่งออก (Export)</h2>
+                    <div id="view-step-5" class="step-view hidden">
+                        <h2 class="text-xl font-light text-gray-700 mb-4 border-b pb-2">ขั้นตอนที่ 5: ประมวลผล & ส่งออก</h2>
                         <div class="wpf-group-box">
                             <span class="wpf-group-header">ตำแหน่งบันทึกไฟล์</span>
                             <div class="flex gap-2 mt-2"><input type="text" class="wpf-input" value="D:\Output" readonly><button class="wpf-button">เลือก...</button></div>
                         </div>
-                        <div class="wpf-group-box flex-1 flex flex-col min-h-[150px]">
+                        <div class="wpf-group-box flex-1 flex flex-col min-h-[300px]">
                             <span class="wpf-group-header">บันทึกการทำงาน (Log)</span>
                             <div class="bg-black text-green-400 font-mono text-xs p-2 flex-1 overflow-y-auto rounded" id="consoleLog">
                                 > Ready...<span class="animate-pulse">_</span>
                             </div>
                         </div>
-                        <div class="flex flex-col md:flex-row items-center gap-4 mt-4 bg-gray-100 p-4 border rounded">
-                            <div class="flex-1 w-full">
+                        <div class="flex items-center gap-4 mt-4 bg-gray-100 p-4 border rounded">
+                            <div class="flex-1">
                                 <div class="flex justify-between text-xs mb-1"><span>ความคืบหน้า</span><span id="percentText">0%</span></div>
                                 <div class="h-4 bg-gray-300 rounded overflow-hidden"><div id="mainProgressBar" class="h-full bg-green-500 w-0 transition-all duration-300"></div></div>
                             </div>
-                            <button onclick="startProcessing()" class="wpf-button wpf-button-primary px-8 py-3 text-lg font-bold w-full md:w-auto">▶ เริ่มต้น</button>
+                            <button onclick="startProcessing()" class="wpf-button wpf-button-primary px-8 py-3 text-lg font-bold">▶ เริ่มต้น</button>
                         </div>
-                        <div class="mt-auto flex justify-start pt-4 shrink-0">
+                        <div class="mt-auto flex justify-start pt-4">
                             <button onclick="setAppStep(4)" class="wpf-button">⬅ ย้อนกลับ</button>
                         </div>
                     </div>
@@ -625,7 +649,7 @@
                 </div>
             </div>
             
-            <div class="status-bar hidden md:flex">
+            <div class="status-bar">
                 <div class="flex-1">Demo Mode</div>
                 <div class="mr-4">Memory: 124MB</div>
                 <div>WPF UI Mockup</div>
@@ -693,6 +717,9 @@
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
+            
+            // Initial call to set App Scale correctly on load
+            scaleAppWindow();
         });
 
         // --- APP: NAVIGATION LOGIC ---
@@ -709,11 +736,8 @@
                 }
             }
             const progress = step * 20;
-            const progressEl = document.getElementById('projectProgress');
-            if(progressEl) {
-                progressEl.style.width = `${progress}%`;
-                progressEl.parentElement.nextElementSibling.innerText = `${progress}%`;
-            }
+            document.getElementById('projectProgress').style.width = `${progress}%`;
+            document.getElementById('projectProgress').parentElement.nextElementSibling.innerText = `${progress}%`;
         }
 
         // --- APP: PROCESSING LOGIC ---
@@ -744,7 +768,31 @@
             }, 150);
         }
 
-        // Initial Setup
+        // --- FIX: APP WINDOW SCALING ---
+        // ฟังก์ชันสำหรับย่อส่วนหน้าต่างโปรแกรมจำลองให้พอดีกับหน้าจอ
+        function scaleAppWindow() {
+            const appWindow = document.getElementById('appWindow');
+            if (appWindow) {
+                const windowWidth = window.innerWidth;
+                const windowHeight = window.innerHeight;
+                
+                // คำนวณ Scale Factor (เผื่อ Margin 20px)
+                const scaleX = (windowWidth - 40) / 1100;
+                const scaleY = (windowHeight - 40) / 750;
+                
+                // เลือกค่าที่น้อยกว่าเพื่อให้พอดีทั้งกว้างและสูง
+                let scale = Math.min(scaleX, scaleY);
+                
+                // ไม่ขยายเกิน 1 เท่า (ถ้าจอใหญ่กว่า 1100px ก็แสดงขนาดปกติ)
+                if (scale > 1) scale = 1;
+
+                appWindow.style.transform = `scale(${scale})`;
+            }
+        }
+
+        // เรียกใช้ฟังก์ชัน Scale เมื่อมีการปรับขนาดหน้าจอ
+        window.addEventListener('resize', scaleAppWindow);
+        // Initial setup
         updateWebSimulation();
     </script>
 </body>

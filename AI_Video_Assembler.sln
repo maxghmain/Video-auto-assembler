@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AI_Video_Assembler", "AI_Video_Assembler.csproj", "{ABCB703F-6682-697D-5BA9-690C84B60F3A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ABCB703F-6682-697D-5BA9-690C84B60F3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABCB703F-6682-697D-5BA9-690C84B60F3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABCB703F-6682-697D-5BA9-690C84B60F3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABCB703F-6682-697D-5BA9-690C84B60F3A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8083F7BB-D1D7-40C6-94D7-C48D4046DA87}
+	EndGlobalSection
+EndGlobal

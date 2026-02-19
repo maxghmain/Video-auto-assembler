@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
@@ -30,6 +31,20 @@ namespace AI_Video_Assembler
         // [New] Matrix Variables
         private long _totalCombinations = 0;
 
+        #region 0.Varidate Step
+        private bool ValidateStep1()
+        {
+            // ตรวจสอบว่า List/Collection ของซีนว่างเปล่าหรือไม่
+            if (Folders == null || Folders.Count == 0)
+            {
+                // แจ้งเตือนภาษาไทยตามที่กำหนด
+                MessageBox.Show("กรุณาอัปโหลดซีนของวีดีโอก่อนไปสเตปถัดไป", "แจ้งเตือน", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            return true; // มีซีนแล้ว ให้ผ่านได้
+        }
+        #endregion
 
         #region 1. Data Models
         public class SceneFolder : INotifyPropertyChanged
@@ -139,8 +154,20 @@ namespace AI_Video_Assembler
             private double _textDuration = 5.0;
             public double TextDuration { get => _textDuration; set { _textDuration = value; OnPropertyChanged(nameof(TextDuration)); } }
 
+            private double _effectDuration = 1.0;
+            public double EffectDuration { get => _effectDuration; set { _effectDuration = value; OnPropertyChanged(nameof(EffectDuration)); } }
+
+            private string _exitEffect = "None (ไม่มี)";
+            public string ExitEffect { get => _exitEffect; set { _exitEffect = value; OnPropertyChanged(nameof(ExitEffect)); } }
+
+            private double _exitEffectDuration = 1.0;
+            public double ExitEffectDuration { get => _exitEffectDuration; set { _exitEffectDuration = value; OnPropertyChanged(nameof(ExitEffectDuration)); } }
+
             private bool _hasExitAnimation = false;
             public bool HasExitAnimation { get => _hasExitAnimation; set { _hasExitAnimation = value; OnPropertyChanged(nameof(HasExitAnimation)); } }
+
+            private string _activePresetName = "";
+            public string ActivePresetName { get => _activePresetName; set { _activePresetName = value; OnPropertyChanged(nameof(ActivePresetName)); } }
 
             // Selection Properties
             private bool _isSelectedLayer = false;
@@ -232,15 +259,29 @@ namespace AI_Video_Assembler
         }
         #endregion
 
+        /// <summary>ช่วงที่กำลังเล่นในพรีวิว: Intro = ภาพต้น, Clips = วิดีโอ, Outro = ภาพท้าย</summary>
+        private enum PreviewPhase { Idle, Intro, Clips, Outro }
+
         #region 2. Variables & Constructor
         private int _currentStep = 1;
         private List<string> _previewPlaylist = new List<string>();
         private List<double> _clipAccumulatedDurations = new List<double>();
         private double _totalSequenceDuration = 0;
+        private double _clipsTotalDuration = 0;
         private int _currentPlaylistIndex = 0;
         private DispatcherTimer _trimTimer;
         private bool _isPlayerAActive = false;
         private bool _isDraggingSlider = false;
+        private bool _nextPlayerReadyForSwitch = false;
+
+        private string _introImagePath = null;
+        private string _outroImagePath = null;
+        private double _introDurationSeconds = 0;
+        private double _outroDurationSeconds = 0;
+        private PreviewPhase _previewPhase = PreviewPhase.Idle;
+        private DateTime _introStartTime;
+        private DateTime _outroStartTime;
+        private double _pausedSequenceTime = 0;
         public ObservableCollection<string> CachedColors { get; set; } = new ObservableCollection<string>();
         private string _cacheFilePath = "color_cache.txt";
         private DispatcherTimer _step3Timer;
@@ -248,7 +289,19 @@ namespace AI_Video_Assembler
         private Point _clickPosition;
         private TextLayer _draggingLayer;
         private bool _isDraggingSliderStep3 = false;
+        private bool _step3WasPlayingBeforeSliderDrag = false;
         private bool _isAdjustingFontSize = false;
+        private double _step3TimelinePixelsPerSecond = 40;
+        private double _step3TimelineTotalDuration = 0;
+        // Step 3 timeline segment drag/resize
+        private bool _step3SegmentDragging;
+        private bool _step3SegmentResizing;
+        private TextLayer _step3SegmentLayer;
+        private Border _step3SegmentElement;
+        private double _step3SegmentStartMouseX;
+        private double _step3SegmentStartDelay;
+        private double _step3SegmentStartDuration;
+        private const double Step3SegmentMinDuration = 0.5;
         public ObservableCollection<SceneFolder> Folders { get; set; }
         public ObservableCollection<FontFamilyGroup> FontGroups { get; set; } = new ObservableCollection<FontFamilyGroup>();
 
@@ -257,7 +310,7 @@ namespace AI_Video_Assembler
             InitializeComponent();
             Folders = new ObservableCollection<SceneFolder>();
             if (ListFolders != null) { ListFolders.ItemsSource = Folders; ListFolders.SelectionChanged += ListFolders_SelectionChanged; }
-            _trimTimer = new DispatcherTimer(); _trimTimer.Interval = TimeSpan.FromMilliseconds(50); _trimTimer.Tick += TrimTimer_Tick;
+            _trimTimer = new DispatcherTimer(); _trimTimer.Interval = TimeSpan.FromMilliseconds(25); _trimTimer.Tick += TrimTimer_Tick;
             _step3Timer = new DispatcherTimer(); _step3Timer.Interval = TimeSpan.FromMilliseconds(100); _step3Timer.Tick += Step3Timer_Tick;
 
             LoadColorCache();
@@ -281,38 +334,55 @@ namespace AI_Video_Assembler
 
         private void GoToStep(int step)
         {
+            // [เพิ่มใหม่] เงื่อนไข Lock: หากพยายามไป Step อื่น (2,3,4,5) แต่ยังไม่มี Scene ใน Step 1
+            if (step > 1 && (Folders == null || Folders.Count == 0))
+            {
+                MessageBox.Show("กรุณาอัปโหลดซีนของวีดีโอก่อนไปสเตปถัดไป", "แจ้งเตือน", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return; // หยุดการทำงาน ไม่เปลี่ยนหน้า
+            }
+
             _currentStep = step;
+
+            // ซ่อนทุก View ก่อน
             if (ViewStep1 != null) ViewStep1.Visibility = Visibility.Collapsed;
             if (ViewStep2 != null) ViewStep2.Visibility = Visibility.Collapsed;
             if (ViewStep3 != null) ViewStep3.Visibility = Visibility.Collapsed;
             if (ViewStep4 != null) ViewStep4.Visibility = Visibility.Collapsed;
             if (ViewStep5 != null) ViewStep5.Visibility = Visibility.Collapsed;
 
-            if (step != 2) StopPreview();       // หยุด Step 2
-            StopPreviewStep3();                 // หยุด Step 3
-            StopStep4_Click(null, null);        // [เพิ่ม] หยุด Step 4 (เรียกฟังก์ชันปุ่ม Stop)
+            // หยุดการเล่นวิดีโอ Preview ของ Step ต่างๆ เมื่อเปลี่ยนหน้า
+            if (step != 2) StopPreview();
+            StopPreviewStep3();
+            StopStep4_Click(null, null);
 
+            // แสดง View ที่เลือก
             switch (step)
             {
-                case 1: if (ViewStep1 != null) ViewStep1.Visibility = Visibility.Visible; break;
-                case 2: if (ViewStep2 != null) ViewStep2.Visibility = Visibility.Visible; break;
+                case 1:
+                    if (ViewStep1 != null) ViewStep1.Visibility = Visibility.Visible;
+                    break;
+                case 2:
+                    if (ViewStep2 != null) ViewStep2.Visibility = Visibility.Visible;
+                    break;
                 case 3:
                     if (ViewStep3 != null) ViewStep3.Visibility = Visibility.Visible;
                     RefreshVisualSceneSelect();
                     break;
-                case 4: if (ViewStep4 != null) ViewStep4.Visibility = Visibility.Visible; break;
-
-                case 5: // [แก้ไข] เพิ่ม Logic อัปเดต Summary เมื่อเข้า Step 5
+                case 4:
+                    if (ViewStep4 != null) ViewStep4.Visibility = Visibility.Visible;
+                    break;
+                case 5:
                     if (ViewStep5 != null)
                     {
                         ViewStep5.Visibility = Visibility.Visible;
-                        UpdateStep5Summary(); // เรียกฟังก์ชันอัปเดต
+                        UpdateStep5Summary();
                     }
                     break;
             }
+
+            // อัปเดตเมนู Sidebar และ Progress Bar
             UpdateSidebarUI(step);
         }
-
         private void UpdateStep5Summary()
         {
             if (TxtSummaryRes == null) return;
@@ -397,9 +467,21 @@ namespace AI_Video_Assembler
         private void MoveSceneDown_Click(object sender, RoutedEventArgs e) { if (sender is Button btn && btn.Tag is SceneFolder folder) { int idx = Folders.IndexOf(folder); if (idx < Folders.Count - 1) Folders.Move(idx, idx + 1); } }
         #endregion
 
-        #region Step 2: Settings
-        private void SpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e) { if (TxtSpeedValue != null) { TxtSpeedValue.Text = $"{e.NewValue:F1}x"; if (PreviewPlayerA != null) PreviewPlayerA.SpeedRatio = e.NewValue; if (PreviewPlayerB != null) PreviewPlayerB.SpeedRatio = e.NewValue; } }
-        private void MuteAudio_Click(object sender, RoutedEventArgs e) { bool mute = ChkMuteAudio.IsChecked == true; if (PreviewPlayerA != null) PreviewPlayerA.IsMuted = mute; if (PreviewPlayerB != null) PreviewPlayerB.IsMuted = mute; }
+        #region Step 2: Settings (Seamless Playback & Preview = Render)
+        private void SpeedSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (TxtSpeedValue != null) TxtSpeedValue.Text = $"{e.NewValue:F1}x";
+            if (PreviewPlayerA != null) PreviewPlayerA.SpeedRatio = e.NewValue;
+            if (PreviewPlayerB != null) PreviewPlayerB.SpeedRatio = e.NewValue;
+        }
+
+        private void MuteAudio_Click(object sender, RoutedEventArgs e)
+        {
+            bool mute = ChkMuteAudio != null && ChkMuteAudio.IsChecked == true;
+            if (PreviewPlayerA != null) PreviewPlayerA.IsMuted = mute;
+            if (PreviewPlayerB != null) PreviewPlayerB.IsMuted = mute;
+        }
+
         private void AspectRatio_Click(object sender, RoutedEventArgs e)
         {
             if (sender is RadioButton rb && rb.Tag != null)
@@ -411,108 +493,484 @@ namespace AI_Video_Assembler
             }
         }
 
+        private void BrowseIntro_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.WindowsAPICodePack.Dialogs.CommonOpenFileDialog();
+            dialog.Filters.Add(new Microsoft.WindowsAPICodePack.Dialogs.CommonFileDialogFilter("Images", "*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp"));
+            if (dialog.ShowDialog() == Microsoft.WindowsAPICodePack.Dialogs.CommonFileDialogResult.Ok)
+            {
+                _introImagePath = dialog.FileName;
+                if (TxtIntroPath != null) TxtIntroPath.Text = Path.GetFileName(_introImagePath);
+            }
+        }
+
+        private void BrowseOutro_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.WindowsAPICodePack.Dialogs.CommonOpenFileDialog();
+            dialog.Filters.Add(new Microsoft.WindowsAPICodePack.Dialogs.CommonFileDialogFilter("Images", "*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp"));
+            if (dialog.ShowDialog() == Microsoft.WindowsAPICodePack.Dialogs.CommonFileDialogResult.Ok)
+            {
+                _outroImagePath = dialog.FileName;
+                if (TxtOutroPath != null) TxtOutroPath.Text = Path.GetFileName(_outroImagePath);
+            }
+        }
+
         private void PlaySequencePreview_Click(object sender, RoutedEventArgs e)
         {
-            if (Folders.Count == 0) return;
-            _previewPlaylist.Clear(); _clipAccumulatedDurations.Clear(); _totalSequenceDuration = 0;
-            double trimStart = 0; double.TryParse(TxtTrimStart?.Text, out trimStart);
-            double trimEnd = 0; double.TryParse(TxtTrimEnd?.Text, out trimEnd);
-            double speed = SpeedSlider.Value;
+            if (Folders == null || Folders.Count == 0) return;
+
+            _previewPlaylist.Clear();
+            _clipAccumulatedDurations.Clear();
+            _clipsTotalDuration = 0;
+            _totalSequenceDuration = 0;
+            _nextPlayerReadyForSwitch = false;
+
+            double trimStart = 0;
+            double.TryParse(TxtTrimStart?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimStart);
+            double trimEnd = 0;
+            double.TryParse(TxtTrimEnd?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimEnd);
+            double speed = SpeedSlider != null ? SpeedSlider.Value : 1.0;
 
             foreach (var folder in Folders)
             {
-                // [FIX] Select only the FIRST checked file in each scene
-                var clip = folder.Files.FirstOrDefault(f => f.Status == "Ready" && f.IsSelected);
+                var clip = folder.Files?.FirstOrDefault(f => f.Status == "Ready" && f.IsSelected);
                 if (clip != null)
                 {
-                    _previewPlaylist.Add(clip.FilePath); _clipAccumulatedDurations.Add(_totalSequenceDuration);
-                    double dur = 0; TimeSpan.TryParse("00:" + clip.Duration, out TimeSpan ts); dur = ts.TotalSeconds;
+                    _previewPlaylist.Add(clip.FilePath);
+                    double dur = ParseClipDurationSeconds(clip.Duration);
                     double playDur = Math.Max(0, dur - trimStart - trimEnd);
-                    _totalSequenceDuration += (playDur / speed);
+                    _clipAccumulatedDurations.Add(_clipsTotalDuration);
+                    _clipsTotalDuration += (playDur / speed);
                 }
             }
-            if (_previewPlaylist.Count == 0) { MessageBox.Show("กรุณาเลือกวิดีโออย่างน้อย 1 ไฟล์ใน Step 1"); return; }
+
+            if (_previewPlaylist.Count == 0)
+            {
+                MessageBox.Show("กรุณาเลือกวิดีโออย่างน้อย 1 ไฟล์ใน Step 1", "แจ้งเตือน", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            _introDurationSeconds = 0;
+            _outroDurationSeconds = 0;
+            if (!string.IsNullOrWhiteSpace(_introImagePath) && File.Exists(_introImagePath))
+            {
+                double.TryParse(TxtIntroDuration?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out _introDurationSeconds);
+                _introDurationSeconds = Math.Max(0, _introDurationSeconds);
+            }
+            if (!string.IsNullOrWhiteSpace(_outroImagePath) && File.Exists(_outroImagePath))
+            {
+                double.TryParse(TxtOutroDuration?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out _outroDurationSeconds);
+                _outroDurationSeconds = Math.Max(0, _outroDurationSeconds);
+            }
+
+            _totalSequenceDuration = _introDurationSeconds + _clipsTotalDuration + _outroDurationSeconds;
+            for (int i = 0; i < _clipAccumulatedDurations.Count; i++)
+                _clipAccumulatedDurations[i] += _introDurationSeconds;
 
             if (TxtTotalTime != null) TxtTotalTime.Text = TimeSpan.FromSeconds(_totalSequenceDuration).ToString(@"mm\:ss");
-            if (TimelineSlider != null) { TimelineSlider.Maximum = _totalSequenceDuration; TimelineSlider.Value = 0; }
-            if (BtnPausePreview != null) BtnPausePreview.IsEnabled = true;
+            if (TimelineSlider != null) { TimelineSlider.Maximum = _totalSequenceDuration; TimelineSlider.Value = 0; TimelineSlider.Minimum = 0; }
+            if (BtnPlayPauseToggle != null) BtnPlayPauseToggle.IsEnabled = true;
             if (BtnStopPreview != null) BtnStopPreview.IsEnabled = true;
             if (PreviewPlaceholder != null) PreviewPlaceholder.Visibility = Visibility.Collapsed;
 
-            StopPlayers(); _currentPlaylistIndex = 0; _isPlayerAActive = true;
-            PreparePlayer(PreviewPlayerA, 0); if (_previewPlaylist.Count > 1) PreparePlayer(PreviewPlayerB, 1);
-            PreviewPlayerA.Opacity = 1; PreviewPlayerB.Opacity = 0;
-            PreviewPlayerA.Play(); _trimTimer.Start();
+            StopPlayers();
+            HideIntroOutroImage();
+            _currentPlaylistIndex = 0;
+            _isPlayerAActive = true;
+            _pausedSequenceTime = 0;
+
+            if (_introDurationSeconds > 0 && !string.IsNullOrEmpty(_introImagePath))
+            {
+                _previewPhase = PreviewPhase.Intro;
+                ShowIntroOutroImage(_introImagePath);
+                _introStartTime = DateTime.Now;
+                _trimTimer.Start();
+                UpdateStep2PlayPauseIcon();
+                return;
+            }
+
+            _previewPhase = PreviewPhase.Clips;
+            PreparePlayer(PreviewPlayerA, 0, autoPlay: true);
+            if (_previewPlaylist.Count > 1)
+                PreparePlayer(PreviewPlayerB, 1, autoPlay: false);
+            PreviewPlayerA.Opacity = 1;
+            PreviewPlayerB.Opacity = 0;
+            PreviewPlayerA.Play();
+            _trimTimer.Start();
+            UpdateStep2PlayPauseIcon();
+        }
+
+        private static double ParseClipDurationSeconds(string duration)
+        {
+            if (string.IsNullOrWhiteSpace(duration)) return 0;
+            if (TimeSpan.TryParse("00:" + duration.Trim(), CultureInfo.InvariantCulture, out TimeSpan ts))
+                return ts.TotalSeconds;
+            return 0;
+        }
+
+        private void ShowIntroOutroImage(string imagePath)
+        {
+            try
+            {
+                if (IntroOutroImage == null) return;
+                var uri = new Uri(imagePath, UriKind.Absolute);
+                IntroOutroImage.Source = new BitmapImage(uri);
+                IntroOutroImage.Visibility = Visibility.Visible;
+                if (PreviewPlayerA != null) PreviewPlayerA.Opacity = 0;
+                if (PreviewPlayerB != null) PreviewPlayerB.Opacity = 0;
+            }
+            catch { }
+        }
+
+        private void HideIntroOutroImage()
+        {
+            if (IntroOutroImage != null) { IntroOutroImage.Source = null; IntroOutroImage.Visibility = Visibility.Collapsed; }
+            _previewPhase = PreviewPhase.Idle;
+        }
+
+        private double GetCurrentSequenceTime()
+        {
+            if (_previewPhase == PreviewPhase.Intro)
+                return Math.Min(_introDurationSeconds, (DateTime.Now - _introStartTime).TotalSeconds);
+            if (_previewPhase == PreviewPhase.Outro)
+            {
+                double elapsed = (DateTime.Now - _outroStartTime).TotalSeconds;
+                return _introDurationSeconds + _clipsTotalDuration + Math.Min(elapsed, _outroDurationSeconds);
+            }
+            if (_previewPhase == PreviewPhase.Clips)
+            {
+                var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                if (active == null || active.Source == null || !active.NaturalDuration.HasTimeSpan) return _introDurationSeconds;
+                double trimStart = 0; double.TryParse(TxtTrimStart?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimStart);
+                double speed = SpeedSlider != null ? SpeedSlider.Value : 1.0;
+                double currentClipTime = active.Position.TotalSeconds;
+                if (currentClipTime < trimStart) currentClipTime = trimStart;
+                double playedInClip = (currentClipTime - trimStart) / speed;
+                return _clipAccumulatedDurations[_currentPlaylistIndex] + playedInClip;
+            }
+            return _pausedSequenceTime;
         }
 
         private void PausePreview_Click(object sender, RoutedEventArgs e)
         {
-            var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
-            if (_trimTimer.IsEnabled) { active.Pause(); _trimTimer.Stop(); } else { active.Play(); _trimTimer.Start(); }
+            if (_trimTimer.IsEnabled)
+            {
+                _pausedSequenceTime = GetCurrentSequenceTime();
+                _trimTimer.Stop();
+                if (_previewPhase == PreviewPhase.Clips)
+                {
+                    var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                    if (active != null) active.Pause();
+                }
+            }
+            else
+            {
+                SeekToTime(_pausedSequenceTime);
+                if (_previewPhase == PreviewPhase.Intro)
+                { _introStartTime = DateTime.Now.AddSeconds(-_pausedSequenceTime); _trimTimer.Start(); }
+                else if (_previewPhase == PreviewPhase.Clips)
+                { var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB; if (active != null) active.Play(); _trimTimer.Start(); }
+                else if (_previewPhase == PreviewPhase.Outro)
+                { _outroStartTime = DateTime.Now.AddSeconds(-(_pausedSequenceTime - _introDurationSeconds - _clipsTotalDuration)); _trimTimer.Start(); }
+            }
         }
+
         private void StopPreview_Click(object sender, RoutedEventArgs e) { StopPreview(); }
 
-        private void PreparePlayer(MediaElement player, int index)
+        private void UpdateStep2PlayPauseIcon()
         {
-            if (index >= _previewPlaylist.Count) return;
-            try { player.Source = new Uri(_previewPlaylist[index]); player.SpeedRatio = SpeedSlider.Value; player.IsMuted = ChkMuteAudio.IsChecked == true; double start = 0; double.TryParse(TxtTrimStart.Text, out start); player.Position = TimeSpan.FromSeconds(start); player.Play(); player.Pause(); } catch { }
+            if (IconPlayPause == null) return;
+            try
+            {
+                var isPlaying = _trimTimer != null && _trimTimer.IsEnabled;
+                var geo = (Geometry)Resources[isPlaying ? "IconPause" : "IconPlay"];
+                if (geo != null) IconPlayPause.Data = geo;
+            }
+            catch { }
+        }
+
+        private void PlayPauseToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_trimTimer.IsEnabled)
+            {
+                _pausedSequenceTime = GetCurrentSequenceTime();
+                _trimTimer.Stop();
+                if (_previewPhase == PreviewPhase.Clips)
+                {
+                    var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                    if (active != null) active.Pause();
+                }
+            }
+            else
+            {
+                if (_totalSequenceDuration > 0 && _pausedSequenceTime < _totalSequenceDuration)
+                {
+                    SeekToTime(_pausedSequenceTime);
+                    if (_previewPhase == PreviewPhase.Intro)
+                    { _introStartTime = DateTime.Now.AddSeconds(-_pausedSequenceTime); _trimTimer.Start(); }
+                    else if (_previewPhase == PreviewPhase.Clips)
+                    { var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB; if (active != null) active.Play(); _trimTimer.Start(); }
+                    else if (_previewPhase == PreviewPhase.Outro)
+                    { _outroStartTime = DateTime.Now.AddSeconds(-(_pausedSequenceTime - _introDurationSeconds - _clipsTotalDuration)); _trimTimer.Start(); }
+                }
+                else
+                    PlaySequencePreview_Click(sender, e);
+            }
+            UpdateStep2PlayPauseIcon();
+        }
+
+        private void PreparePlayer(MediaElement player, int index, bool autoPlay = false)
+        {
+            if (player == null || index >= _previewPlaylist.Count) return;
+
+            double trimStart = 0;
+            double.TryParse(TxtTrimStart?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimStart);
+            double speed = SpeedSlider != null ? SpeedSlider.Value : 1.0;
+            bool mute = ChkMuteAudio != null && ChkMuteAudio.IsChecked == true;
+
+            try
+            {
+                player.SpeedRatio = speed;
+                player.IsMuted = mute;
+                player.Source = new Uri(_previewPlaylist[index]);
+                player.Position = TimeSpan.FromSeconds(trimStart);
+                player.Play();
+                player.Pause();
+                if (autoPlay) player.Play();
+            }
+            catch { }
         }
 
         private void TrimTimer_Tick(object sender, EventArgs e)
         {
+            double totalTime;
+
+            if (_previewPhase == PreviewPhase.Intro)
+            {
+                totalTime = (DateTime.Now - _introStartTime).TotalSeconds;
+                if (!_isDraggingSlider && TimelineSlider != null)
+                {
+                    TimelineSlider.Value = Math.Min(totalTime, _introDurationSeconds);
+                    if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(totalTime).ToString(@"mm\:ss");
+                }
+                if (totalTime >= _introDurationSeconds)
+                {
+                    _previewPhase = PreviewPhase.Clips;
+                    HideIntroOutroImage();
+                    _currentPlaylistIndex = 0;
+                    _isPlayerAActive = true;
+                    PreparePlayer(PreviewPlayerA, 0, autoPlay: true);
+                    if (_previewPlaylist.Count > 1)
+                        PreparePlayer(PreviewPlayerB, 1, autoPlay: false);
+                    PreviewPlayerA.Opacity = 1;
+                    PreviewPlayerB.Opacity = 0;
+                    PreviewPlayerA.Play();
+                }
+                return;
+            }
+
+            if (_previewPhase == PreviewPhase.Outro)
+            {
+                double elapsed = (DateTime.Now - _outroStartTime).TotalSeconds;
+                totalTime = _introDurationSeconds + _clipsTotalDuration + elapsed;
+                if (!_isDraggingSlider && TimelineSlider != null)
+                {
+                    TimelineSlider.Value = Math.Min(totalTime, _totalSequenceDuration);
+                    if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(totalTime).ToString(@"mm\:ss");
+                }
+                if (elapsed >= _outroDurationSeconds)
+                    StopPreview();
+                return;
+            }
+
             var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
             var next = _isPlayerAActive ? PreviewPlayerB : PreviewPlayerA;
-            if (active.Source == null || !active.NaturalDuration.HasTimeSpan) return;
+            if (active == null || active.Source == null || !active.NaturalDuration.HasTimeSpan) return;
 
-            double start = 0; double.TryParse(TxtTrimStart.Text, out start);
-            double end = 0; double.TryParse(TxtTrimEnd.Text, out end);
-            double speed = SpeedSlider.Value;
+            double trimStart = 0;
+            double.TryParse(TxtTrimStart?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimStart);
+            double trimEnd = 0;
+            double.TryParse(TxtTrimEnd?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimEnd);
+            double speed = SpeedSlider != null ? SpeedSlider.Value : 1.0;
+
             double currentClipTime = active.Position.TotalSeconds;
-            if (currentClipTime < start) currentClipTime = start;
-            double playedInClip = (currentClipTime - start) / speed;
-            double totalTime = _clipAccumulatedDurations[_currentPlaylistIndex] + playedInClip;
+            if (currentClipTime < trimStart) currentClipTime = trimStart;
+            double playedInClip = (currentClipTime - trimStart) / speed;
+            totalTime = _clipAccumulatedDurations[_currentPlaylistIndex] + playedInClip;
 
-            if (!_isDraggingSlider && TimelineSlider != null) { TimelineSlider.Value = totalTime; TxtCurrentTime.Text = TimeSpan.FromSeconds(totalTime).ToString(@"mm\:ss"); }
+            if (!_isDraggingSlider && TimelineSlider != null)
+            {
+                TimelineSlider.Value = Math.Min(totalTime, TimelineSlider.Maximum);
+                if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(totalTime).ToString(@"mm\:ss");
+            }
 
-            if (active.Position.TotalSeconds >= active.NaturalDuration.TimeSpan.TotalSeconds - end)
+            double clipEndTime = active.NaturalDuration.TimeSpan.TotalSeconds - trimEnd;
+            if (active.Position.TotalSeconds >= clipEndTime)
             {
                 if (_currentPlaylistIndex + 1 < _previewPlaylist.Count)
                 {
-                    next.Play(); next.Opacity = 1; active.Stop(); active.Opacity = 0;
-                    _currentPlaylistIndex++; _isPlayerAActive = !_isPlayerAActive;
-                    if (_currentPlaylistIndex + 1 < _previewPlaylist.Count) PreparePlayer(active, _currentPlaylistIndex + 1);
+                    _nextPlayerReadyForSwitch = false;
+                    next.Play();
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        active.Stop();
+                        active.Opacity = 0;
+                        next.Opacity = 1;
+                    }), DispatcherPriority.Loaded);
+
+                    _currentPlaylistIndex++;
+                    _isPlayerAActive = !_isPlayerAActive;
+
+                    if (_currentPlaylistIndex + 1 < _previewPlaylist.Count)
+                        PreparePlayer(active, _currentPlaylistIndex + 1, autoPlay: false);
                 }
-                else StopPreview();
+                else if (_outroDurationSeconds > 0 && !string.IsNullOrEmpty(_outroImagePath))
+                {
+                    StopPlayers();
+                    _previewPhase = PreviewPhase.Outro;
+                    ShowIntroOutroImage(_outroImagePath);
+                    _outroStartTime = DateTime.Now;
+                }
+                else
+                    StopPreview();
             }
         }
 
-        private void StopPlayers() { if (PreviewPlayerA != null) { PreviewPlayerA.Stop(); PreviewPlayerA.Source = null; PreviewPlayerA.Opacity = 0; } if (PreviewPlayerB != null) { PreviewPlayerB.Stop(); PreviewPlayerB.Source = null; PreviewPlayerB.Opacity = 0; } }
-        private void StopPreview()
+        private void StopPlayers()
         {
-            StopPlayers(); _trimTimer.Stop();
-            if (PreviewPlaceholder != null) PreviewPlaceholder.Visibility = Visibility.Visible;
-            if (TimelineSlider != null) TimelineSlider.Value = 0;
-            if (TxtCurrentTime != null) TxtCurrentTime.Text = "00:00";
+            if (PreviewPlayerA != null) { PreviewPlayerA.Stop(); PreviewPlayerA.Source = null; PreviewPlayerA.Opacity = 0; }
+            if (PreviewPlayerB != null) { PreviewPlayerB.Stop(); PreviewPlayerB.Source = null; PreviewPlayerB.Opacity = 0; }
+            _nextPlayerReadyForSwitch = false;
         }
 
-        private void TimelineSlider_PreviewMouseDown(object sender, MouseButtonEventArgs e) { _isDraggingSlider = true; _trimTimer.Stop(); }
-        private void TimelineSlider_PreviewMouseUp(object sender, MouseButtonEventArgs e) { _isDraggingSlider = false; SeekToTime(TimelineSlider.Value); _trimTimer.Start(); }
+        private void StopPreview()
+        {
+            StopPlayers();
+            _trimTimer.Stop();
+            HideIntroOutroImage();
+            _previewPhase = PreviewPhase.Idle;
+            if (PreviewPlaceholder != null) PreviewPlaceholder.Visibility = Visibility.Visible;
+            if (TimelineSlider != null) TimelineSlider.Value = 0;
+            if (TxtCurrentTime != null) TxtCurrentTime.Text = "0:00";
+            _pausedSequenceTime = 0;
+            UpdateStep2PlayPauseIcon();
+        }
+
+        private void TimelineSlider_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _isDraggingSlider = true;
+            _trimTimer.Stop();
+            if (_previewPhase == PreviewPhase.Clips)
+            {
+                var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                if (active != null) active.Pause();
+            }
+        }
+
+        private void TimelineSlider_PreviewMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            _isDraggingSlider = false;
+            if (TimelineSlider != null)
+            {
+                SeekToTime(TimelineSlider.Value);
+                _pausedSequenceTime = TimelineSlider.Value;
+                if (_previewPhase == PreviewPhase.Intro)
+                    _introStartTime = DateTime.Now.AddSeconds(-_pausedSequenceTime);
+                else if (_previewPhase == PreviewPhase.Outro)
+                    _outroStartTime = DateTime.Now.AddSeconds(-(_pausedSequenceTime - _introDurationSeconds - _clipsTotalDuration));
+                else if (_previewPhase == PreviewPhase.Clips)
+                {
+                    var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                    if (active != null) active.Play();
+                }
+                _trimTimer.Start();
+            }
+        }
+
+        private void TimelineSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_isDraggingSlider && TimelineSlider != null && e.NewValue >= 0)
+            {
+                SeekToTime(e.NewValue);
+                if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(e.NewValue).ToString(@"mm\:ss");
+            }
+        }
+
         private void SeekToTime(double time)
         {
-            int targetIdx = 0; for (int i = 0; i < _clipAccumulatedDurations.Count; i++) if (time >= _clipAccumulatedDurations[i]) targetIdx = i; else break;
+            if (_totalSequenceDuration <= 0) return;
+            time = Math.Max(0, Math.Min(time, _totalSequenceDuration));
+            _pausedSequenceTime = time;
+
+            if (time < _introDurationSeconds)
+            {
+                _previewPhase = PreviewPhase.Intro;
+                StopPlayers();
+                if (!string.IsNullOrEmpty(_introImagePath)) ShowIntroOutroImage(_introImagePath);
+                else HideIntroOutroImage();
+                if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(time).ToString(@"mm\:ss");
+                return;
+            }
+
+            if (time >= _introDurationSeconds + _clipsTotalDuration)
+            {
+                _previewPhase = PreviewPhase.Outro;
+                StopPlayers();
+                if (!string.IsNullOrEmpty(_outroImagePath))
+                    ShowIntroOutroImage(_outroImagePath);
+                else
+                {
+                    if (IntroOutroImage != null) { IntroOutroImage.Source = null; IntroOutroImage.Visibility = Visibility.Collapsed; }
+                    if (PreviewPlayerA != null) PreviewPlayerA.Opacity = 0;
+                    if (PreviewPlayerB != null) PreviewPlayerB.Opacity = 0;
+                }
+                double outroElapsed = time - (_introDurationSeconds + _clipsTotalDuration);
+                _outroStartTime = DateTime.Now.AddSeconds(-outroElapsed);
+                if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(time).ToString(@"mm\:ss");
+                return;
+            }
+
+            _previewPhase = PreviewPhase.Clips;
+            HideIntroOutroImage();
+
+            if (_clipAccumulatedDurations == null || _clipAccumulatedDurations.Count == 0) return;
+
+            int targetIdx = 0;
+            for (int i = 0; i < _clipAccumulatedDurations.Count; i++)
+            {
+                if (time >= _clipAccumulatedDurations[i]) targetIdx = i;
+                else break;
+            }
+
             double local = time - _clipAccumulatedDurations[targetIdx];
-            double start = 0; double.TryParse(TxtTrimStart.Text, out start);
-            double pos = start + (local * SpeedSlider.Value);
+            double trimStart = 0;
+            double.TryParse(TxtTrimStart?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out trimStart);
+            double speed = SpeedSlider != null ? SpeedSlider.Value : 1.0;
+            double pos = trimStart + (local * speed);
 
             if (targetIdx != _currentPlaylistIndex)
             {
                 _currentPlaylistIndex = targetIdx;
-                StopPlayers(); _isPlayerAActive = true;
-                PreviewPlayerA.Source = new Uri(_previewPlaylist[targetIdx]);
+                StopPlayers();
+                _isPlayerAActive = true;
+
+                PreparePlayer(PreviewPlayerA, targetIdx, autoPlay: false);
                 PreviewPlayerA.Position = TimeSpan.FromSeconds(pos);
-                PreviewPlayerA.Opacity = 1; PreviewPlayerA.Play();
+                PreviewPlayerA.Opacity = 1;
+
+                if (targetIdx + 1 < _previewPlaylist.Count)
+                {
+                    PreparePlayer(PreviewPlayerB, targetIdx + 1, autoPlay: false);
+                    PreviewPlayerB.Opacity = 0;
+                }
             }
-            else { (_isPlayerAActive ? PreviewPlayerA : PreviewPlayerB).Position = TimeSpan.FromSeconds(pos); }
+            else
+            {
+                var active = _isPlayerAActive ? PreviewPlayerA : PreviewPlayerB;
+                if (active != null) active.Position = TimeSpan.FromSeconds(pos);
+            }
+
+            if (TxtCurrentTime != null) TxtCurrentTime.Text = TimeSpan.FromSeconds(time).ToString(@"mm\:ss");
         }
         #endregion
 
@@ -714,6 +1172,17 @@ namespace AI_Video_Assembler
         }
 
         // [ADDED] Missing SelectionChanged Handler for Text Layers
+        private void UpdateStep3PresetLabel()
+        {
+            if (TxtActivePreset == null || TxtPositionXY == null) return;
+            if (ListTextLayers.SelectedItem is TextLayer layer)
+            {
+                TxtPositionXY.Text = $"X = {layer.X:F0}, Y = {layer.Y:F0} px";
+                TxtActivePreset.Text = string.IsNullOrEmpty(layer.ActivePresetName) ? "-" : layer.ActivePresetName;
+            }
+            else { TxtPositionXY.Text = "X = -, Y = - px"; TxtActivePreset.Text = "-"; }
+        }
+
         private void ListTextLayers_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // เปลี่ยนชื่อตัวแปรเป็น selectedLayer เพื่อไม่ให้ชนกับตัวแปรอื่น
@@ -748,7 +1217,10 @@ namespace AI_Video_Assembler
                         }
                     }
                 }
+                UpdateStep3PresetLabel();
             }
+            else
+                UpdateStep3PresetLabel();
         }
         private void CmbFontFamily_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -807,23 +1279,34 @@ namespace AI_Video_Assembler
             StopPreviewStep3();
         }
 
-        private void PreviewStep3_Play(object sender, RoutedEventArgs e)
+        private void UpdateStep3PlayPauseIcon()
         {
-            if (PreviewPlayerStep3.Source == null) return;
-
-            if (PreviewPlaceholderStep3 != null) PreviewPlaceholderStep3.Visibility = Visibility.Collapsed;
-            PreviewPlayerStep3.Play();
-            _step3Timer.Start();
-            PlayTextAnimations();
-
-            // [UPDATED] Removed Visibility Toggling logic - Buttons always visible
+            if (IconPlayPauseStep3 == null) return;
+            try
+            {
+                var isPlaying = _step3Timer != null && _step3Timer.IsEnabled;
+                var geo = (Geometry)Resources[isPlaying ? "IconPause" : "IconPlay"];
+                if (geo != null) IconPlayPauseStep3.Data = geo;
+            }
+            catch { }
         }
 
-        private void PreviewStep3_Pause(object sender, RoutedEventArgs e)
+        private void PlayPauseToggleStep3_Click(object sender, RoutedEventArgs e)
         {
-            if (PreviewPlayerStep3.CanPause) PreviewPlayerStep3.Pause();
-            _step3Timer.Stop();
-            // [UPDATED] Removed Visibility Toggling logic - Buttons always visible
+            if (PreviewPlayerStep3.Source == null) return;
+            if (_step3Timer.IsEnabled)
+            {
+                if (PreviewPlayerStep3.CanPause) PreviewPlayerStep3.Pause();
+                _step3Timer.Stop();
+            }
+            else
+            {
+                if (PreviewPlaceholderStep3 != null) PreviewPlaceholderStep3.Visibility = Visibility.Collapsed;
+                PreviewPlayerStep3.Play();
+                _step3Timer.Start();
+                PlayTextAnimations();
+            }
+            UpdateStep3PlayPauseIcon();
         }
 
         private void StopPreviewStep3()
@@ -836,11 +1319,8 @@ namespace AI_Video_Assembler
             if (_step3Timer != null) _step3Timer.Stop();
             if (TimelineSliderStep3 != null) TimelineSliderStep3.Value = 0;
             if (TxtCurrentTimeStep3 != null) TxtCurrentTimeStep3.Text = "00:00";
-
-            // Reset to show Preview Area
             if (PreviewPlaceholderStep3 != null) PreviewPlaceholderStep3.Visibility = Visibility.Visible;
-
-            // [UPDATED] Removed Visibility Toggling logic - Buttons always visible
+            UpdateStep3PlayPauseIcon();
         }
 
         private void PlayTextAnimations()
@@ -867,7 +1347,7 @@ namespace AI_Video_Assembler
 
                     if (layer.HasExitAnimation)
                     {
-                        Storyboard sbExit = CreateAnimationStoryboard(layer, container, false);
+                        Storyboard sbExit = CreateAnimationStoryboard(layer, container, false, useExitEffect: true);
                         sbExit.BeginTime = TimeSpan.FromSeconds(layer.Delay + layer.TextDuration);
                         sbExit.Begin();
                     }
@@ -875,26 +1355,27 @@ namespace AI_Video_Assembler
             }
         }
 
-        private Storyboard CreateAnimationStoryboard(TextLayer layer, FrameworkElement container, bool isEnter)
+        private Storyboard CreateAnimationStoryboard(TextLayer layer, FrameworkElement container, bool isEnter, bool useExitEffect = false)
         {
             Storyboard sb = new Storyboard();
-            double dur = layer.AnimationDuration;
+            double dur = isEnter ? layer.EffectDuration : (useExitEffect ? layer.ExitEffectDuration : layer.EffectDuration);
+            string effectName = useExitEffect && !isEnter ? (layer.ExitEffect ?? "None") : layer.AnimationEffect;
             IEasingFunction ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-            if (layer.AnimationEffect.Contains("Fade In"))
+            if (effectName.Contains("Fade In") || effectName.Contains("Fade"))
             {
                 DoubleAnimation fadeIn = new DoubleAnimation(isEnter ? 0 : 1, isEnter ? 1 : 0, TimeSpan.FromSeconds(dur));
                 if (!isEnter) container.Opacity = 1; else container.Opacity = 0;
                 Storyboard.SetTarget(fadeIn, container); Storyboard.SetTargetProperty(fadeIn, new PropertyPath("Opacity")); sb.Children.Add(fadeIn);
             }
-            else if (layer.AnimationEffect.Contains("Slide"))
+            else if (effectName.Contains("Slide"))
             {
                 TranslateTransform tt = new TranslateTransform(); container.RenderTransform = tt;
                 double from = 0, to = 0; string prop = "X";
-                if (layer.AnimationEffect.Contains("Left")) { prop = "X"; from = 200; }
-                else if (layer.AnimationEffect.Contains("Right")) { prop = "X"; from = -200; }
-                else if (layer.AnimationEffect.Contains("Up")) { prop = "Y"; from = 200; }
-                else if (layer.AnimationEffect.Contains("Down")) { prop = "Y"; from = -200; }
+                if (effectName.Contains("Left")) { prop = "X"; from = 200; }
+                else if (effectName.Contains("Right")) { prop = "X"; from = -200; }
+                else if (effectName.Contains("Up")) { prop = "Y"; from = 200; }
+                else if (effectName.Contains("Down")) { prop = "Y"; from = -200; }
 
                 if (isEnter) { to = 0; } else { to = from; from = 0; }
                 if (isEnter && prop == "X") tt.X = from; if (isEnter && prop == "Y") tt.Y = from;
@@ -911,25 +1392,195 @@ namespace AI_Video_Assembler
         {
             if (PreviewPlayerStep3.Source != null && PreviewPlayerStep3.NaturalDuration.HasTimeSpan && !_isDraggingSliderStep3)
             {
-                TimelineSliderStep3.Maximum = PreviewPlayerStep3.NaturalDuration.TimeSpan.TotalSeconds;
+                double dur = PreviewPlayerStep3.NaturalDuration.TimeSpan.TotalSeconds;
+                if (Math.Abs(dur - _step3TimelineTotalDuration) > 0.01)
+                    UpdateStep3Timeline();
+                TimelineSliderStep3.Maximum = dur;
                 TimelineSliderStep3.Value = PreviewPlayerStep3.Position.TotalSeconds;
                 TxtCurrentTimeStep3.Text = PreviewPlayerStep3.Position.ToString(@"mm\:ss");
                 TxtTotalTimeStep3.Text = PreviewPlayerStep3.NaturalDuration.TimeSpan.ToString(@"mm\:ss");
+                UpdateStep3PlayheadPosition();
             }
         }
 
-        private void TimelineSliderStep3_PreviewMouseDown(object sender, MouseButtonEventArgs e) { _isDraggingSliderStep3 = true; _step3Timer.Stop(); PreviewPlayerStep3.Pause(); }
+        private void TimelineZoom_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string tag)
+            {
+                if (tag == "In") _step3TimelinePixelsPerSecond = Math.Min(200, _step3TimelinePixelsPerSecond + 20);
+                else if (tag == "Out") _step3TimelinePixelsPerSecond = Math.Max(20, _step3TimelinePixelsPerSecond - 20);
+                if (TxtTimelineZoom != null) TxtTimelineZoom.Text = $"{(int)_step3TimelinePixelsPerSecond} px/s";
+                UpdateStep3Timeline();
+            }
+        }
+
+        private void UpdateStep3Timeline()
+        {
+            double duration = 0;
+            if (PreviewPlayerStep3?.Source != null && PreviewPlayerStep3.NaturalDuration.HasTimeSpan)
+                duration = PreviewPlayerStep3.NaturalDuration.TimeSpan.TotalSeconds;
+            _step3TimelineTotalDuration = duration;
+
+            double width = Math.Max(100, duration * _step3TimelinePixelsPerSecond);
+
+            if (TimelineRulerCanvas != null)
+            {
+                TimelineRulerCanvas.Children.Clear();
+                TimelineRulerCanvas.Width = width;
+                for (int sec = 0; sec <= (int)Math.Ceiling(duration); sec++)
+                {
+                    double x = sec * _step3TimelinePixelsPerSecond;
+                    var line = new System.Windows.Shapes.Line { X1 = x, Y1 = 16, X2 = x, Y2 = 18, Stroke = new SolidColorBrush(Color.FromRgb(0x9C, 0xA3, 0xAF)), StrokeThickness = 1 };
+                    TimelineRulerCanvas.Children.Add(line);
+                    if (sec % 5 == 0 || sec == 0)
+                    {
+                        var tb = new TextBlock { Text = sec.ToString(), FontSize = 9, Foreground = new SolidColorBrush(Color.FromRgb(0xE5, 0xE7, 0xEB)), Margin = new Thickness(x + 2, 0, 0, 0) };
+                        TimelineRulerCanvas.Children.Add(tb);
+                    }
+                }
+            }
+
+            if (TimelineVideoCanvas != null)
+            {
+                TimelineVideoCanvas.Children.Clear();
+                TimelineVideoCanvas.Width = width;
+                var rect = new System.Windows.Shapes.Rectangle { Width = width, Height = 22, Fill = new SolidColorBrush(Color.FromRgb(0x4F, 0x46, 0xE5)), Opacity = 0.6 };
+                TimelineVideoCanvas.Children.Add(rect);
+            }
+
+            if (TimelineTextCanvas != null)
+            {
+                TimelineTextCanvas.Children.Clear();
+                TimelineTextCanvas.Width = width;
+                if (SceneSelectVisual?.SelectedItem is ComboBoxItem item && item.Tag is SceneFolder folder)
+                {
+                    foreach (var layer in folder.TextLayers)
+                    {
+                        double left = layer.Delay * _step3TimelinePixelsPerSecond;
+                        double w = Math.Max(4, layer.TextDuration * _step3TimelinePixelsPerSecond);
+                        var border = new Border
+                        {
+                            Width = w,
+                            Height = 22,
+                            Background = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)),
+                            Opacity = 0.9,
+                            Tag = layer,
+                            Cursor = Cursors.Hand
+                        };
+                        border.MouseLeftButtonDown += TimelineSegment_MouseDown;
+                        border.MouseMove += TimelineSegment_MouseMove;
+                        border.MouseLeftButtonUp += TimelineSegment_MouseUp;
+                        TimelineTextCanvas.Children.Add(border);
+                        Canvas.SetLeft(border, left);
+                        Canvas.SetTop(border, 2);
+                    }
+                }
+            }
+
+            UpdateStep3PlayheadPosition();
+        }
+
+        private void UpdateStep3PlayheadPosition()
+        {
+            if (TimelinePlayhead == null || _step3TimelineTotalDuration <= 0) return;
+            double t = PreviewPlayerStep3?.Position.TotalSeconds ?? 0;
+            double playheadX = t * _step3TimelinePixelsPerSecond;
+            TimelinePlayhead.Margin = new Thickness(42 + playheadX, 0, 0, 0);
+        }
+
+        private void TimelineSliderStep3_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            _isDraggingSliderStep3 = true;
+            _step3WasPlayingBeforeSliderDrag = _step3Timer.IsEnabled;
+            _step3Timer.Stop();
+            if (PreviewPlayerStep3.CanPause) PreviewPlayerStep3.Pause();
+        }
         private void TimelineSliderStep3_PreviewMouseUp(object sender, MouseButtonEventArgs e)
         {
             _isDraggingSliderStep3 = false;
             if (PreviewPlayerStep3.Source != null)
             {
                 PreviewPlayerStep3.Position = TimeSpan.FromSeconds(TimelineSliderStep3.Value);
-                if (BtnPauseStep3.Visibility == Visibility.Visible) { PreviewPlayerStep3.Play(); _step3Timer.Start(); }
+                if (_step3WasPlayingBeforeSliderDrag) { PreviewPlayerStep3.Play(); _step3Timer.Start(); UpdateStep3PlayPauseIcon(); }
             }
         }
 
-        private void RemoveText_Click(object sender, RoutedEventArgs e) { if (ListTextLayers.SelectedItem is TextLayer selected && SceneSelectVisual.SelectedItem is ComboBoxItem item && item.Tag is SceneFolder folder) { selected.PropertyChanged -= TextLayer_PropertyChanged; folder.TextLayers.Remove(selected); } }
+        private void TimelineSegment_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is TextLayer layer && TimelineTextCanvas != null)
+            {
+                Point posInCanvas = e.GetPosition(TimelineTextCanvas);
+                Point posInSegment = e.GetPosition(border);
+                bool onResizeHandle = border.ActualWidth > 12 && posInSegment.X >= border.ActualWidth - 8;
+                _step3SegmentLayer = layer;
+                _step3SegmentElement = border;
+                _step3SegmentStartMouseX = posInCanvas.X;
+                _step3SegmentStartDelay = layer.Delay;
+                _step3SegmentStartDuration = layer.TextDuration;
+                _step3SegmentResizing = onResizeHandle;
+                _step3SegmentDragging = !onResizeHandle;
+                border.Cursor = onResizeHandle ? Cursors.SizeWE : Cursors.SizeAll;
+                border.CaptureMouse();
+                e.Handled = true;
+            }
+        }
+
+        private void TimelineSegment_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (sender is Border border)
+            {
+                if (!_step3SegmentDragging && !_step3SegmentResizing)
+                {
+                    Point p = e.GetPosition(border);
+                    border.Cursor = (border.ActualWidth > 12 && p.X >= border.ActualWidth - 8) ? Cursors.SizeWE : Cursors.Hand;
+                }
+            }
+            if (TimelineTextCanvas == null || _step3SegmentLayer == null || _step3SegmentElement == null) return;
+            double pps = _step3TimelinePixelsPerSecond;
+            double totalDur = _step3TimelineTotalDuration;
+            double curX = e.GetPosition(TimelineTextCanvas).X;
+            double deltaSec = (curX - _step3SegmentStartMouseX) / pps;
+
+            if (_step3SegmentResizing)
+            {
+                double newDuration = _step3SegmentStartDuration + deltaSec;
+                double maxDur = totalDur > 0 ? Math.Max(0, totalDur - _step3SegmentLayer.Delay) : 60;
+                if (newDuration < Step3SegmentMinDuration) newDuration = Step3SegmentMinDuration;
+                if (newDuration > maxDur) newDuration = maxDur;
+                _step3SegmentLayer.TextDuration = newDuration;
+                double w = Math.Max(4, newDuration * pps);
+                _step3SegmentElement.Width = w;
+            }
+            else if (_step3SegmentDragging)
+            {
+                double newDelay = _step3SegmentStartDelay + deltaSec;
+                double maxDelay = totalDur > 0 ? Math.Max(0, totalDur - _step3SegmentLayer.TextDuration) : 0;
+                if (newDelay < 0) newDelay = 0;
+                if (newDelay > maxDelay) newDelay = maxDelay;
+                _step3SegmentLayer.Delay = newDelay;
+                Canvas.SetLeft(_step3SegmentElement, newDelay * pps);
+            }
+        }
+
+        private void TimelineSegment_MouseUp(object sender, MouseButtonEventArgs e)
+        {
+            TimelineSegment_EndDrag();
+        }
+
+        private void TimelineSegment_EndDrag()
+        {
+            if (_step3SegmentElement != null)
+            {
+                _step3SegmentElement.ReleaseMouseCapture();
+                _step3SegmentElement.Cursor = Cursors.Hand;
+            }
+            _step3SegmentDragging = false;
+            _step3SegmentResizing = false;
+            _step3SegmentLayer = null;
+            _step3SegmentElement = null;
+        }
+
+        private void RemoveText_Click(object sender, RoutedEventArgs e) { if (ListTextLayers.SelectedItem is TextLayer selected && SceneSelectVisual.SelectedItem is ComboBoxItem item && item.Tag is SceneFolder folder) { selected.PropertyChanged -= TextLayer_PropertyChanged; folder.TextLayers.Remove(selected); UpdateStep3Timeline(); } }
 
         private void TextLayer_PropertyChanged(object sender, PropertyChangedEventArgs e)
         {
@@ -962,10 +1613,31 @@ namespace AI_Video_Assembler
                 double ny = _draggingLayer.Y + (cur.Y - _clickPosition.Y);
                 if (nx < 0) nx = 0; if (nx + el.ActualWidth > OverlayItemsControl.ActualWidth) nx = OverlayItemsControl.ActualWidth - el.ActualWidth;
                 if (ny < 0) ny = 0; if (ny + el.ActualHeight > OverlayItemsControl.ActualHeight) ny = OverlayItemsControl.ActualHeight - el.ActualHeight;
-                _draggingLayer.X = nx; _draggingLayer.Y = ny; _clickPosition = cur;
+                _draggingLayer.X = nx; _draggingLayer.Y = ny;
+                _draggingLayer.ActivePresetName = "Custom";
+                _clickPosition = cur;
+                UpdateStep3PresetLabel();
             }
         }
         private void TextOverlay_MouseUp(object sender, MouseButtonEventArgs e) { _isDraggingText = false; _draggingLayer = null; if (sender is FrameworkElement el) el.ReleaseMouseCapture(); }
+
+        private static readonly Dictionary<string, string> PresetDisplayNames = new Dictionary<string, string>
+        {
+            { "TL", "Top-Left (↖)" }, { "TC", "Top-Center (↑)" }, { "TR", "Top-Right (↗)" },
+            { "CL", "Center-Left (←)" }, { "CC", "Center (•)" }, { "CR", "Center-Right (→)" },
+            { "BL", "Bottom-Left (↙)" }, { "BC", "Bottom-Center (↓)" }, { "BR", "Bottom-Right (↘)" }
+        };
+
+        private void TxtPosXY_LostFocus(object sender, RoutedEventArgs e)
+        {
+            if (!(ListTextLayers.SelectedItem is TextLayer layer)) return;
+            if (double.TryParse(TxtPosX?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double x))
+                layer.X = Math.Max(0, x);
+            if (double.TryParse(TxtPosY?.Text, NumberStyles.Any, CultureInfo.InvariantCulture, out double y))
+                layer.Y = Math.Max(0, y);
+            layer.ActivePresetName = "Custom";
+            UpdateStep3PresetLabel();
+        }
 
         private void SetTextPosition_Click(object sender, RoutedEventArgs e)
         {
@@ -974,7 +1646,8 @@ namespace AI_Video_Assembler
                 var container = OverlayItemsControl.ItemContainerGenerator.ContainerFromItem(layer) as FrameworkElement;
                 if (container == null) return;
                 double w = container.ActualWidth, h = container.ActualHeight;
-                double pw = OverlayItemsControl.ActualWidth, ph = OverlayItemsControl.ActualHeight;
+                double pw = OverlayItemsControl.ActualWidth > 0 ? OverlayItemsControl.ActualWidth : 1280;
+                double ph = OverlayItemsControl.ActualHeight > 0 ? OverlayItemsControl.ActualHeight : 720;
                 switch (pos)
                 {
                     case "TL": layer.X = 20; layer.Y = 20; break;
@@ -987,6 +1660,8 @@ namespace AI_Video_Assembler
                     case "BC": layer.X = (pw - w) / 2; layer.Y = ph - h - 20; break;
                     case "BR": layer.X = pw - w - 20; layer.Y = ph - h - 20; break;
                 }
+                layer.ActivePresetName = PresetDisplayNames.TryGetValue(pos, out var name) ? name : pos;
+                UpdateStep3PresetLabel();
             }
         }
 
@@ -1112,6 +1787,7 @@ namespace AI_Video_Assembler
                 newLayer.PropertyChanged += TextLayer_PropertyChanged;
                 folder.TextLayers.Add(newLayer);
                 ListTextLayers.SelectedItem = newLayer;
+                UpdateStep3Timeline();
             }
         }
 
@@ -1375,7 +2051,7 @@ namespace AI_Video_Assembler
         }
 
 
-        
+
 
         private void NumberValidationTextBox(object sender, TextCompositionEventArgs e)
         {
@@ -1711,7 +2387,7 @@ namespace AI_Video_Assembler
                 return false;
             }
         }
-        
+
         // Recursive generation for "All"
         private void GenerateAllCombinations(List<List<VideoFile>> scenes, int depth, List<VideoFile> current, List<List<VideoFile>> results)
         {
